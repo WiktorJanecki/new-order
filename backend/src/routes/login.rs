@@ -1,0 +1,59 @@
+use axum::{extract::State, routing::post, Json, Router};
+use jwt_simple::{
+    claims::Claims,
+    prelude::{Duration, MACLike},
+};
+use serde::Deserialize;
+use tower_cookies::{Cookie, Cookies};
+use tracing::trace;
+
+use crate::{error::Result, models::user::User, AppState, Error, JWTClaims, AUTH_COOKIE_KEY};
+
+pub fn routes() -> Router<AppState> {
+    Router::new().route("/login", post(login))
+}
+
+#[derive(Deserialize)]
+struct LoginPaylod {
+    login: String,
+    password: String,
+}
+
+async fn login(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    payload: Json<LoginPaylod>,
+) -> Result<()> {
+    trace!(
+        " -- HANDLER /login with {} {}",
+        &payload.login,
+        &payload.password
+    );
+
+    let output: User = sqlx::query_as("SELECT * FROM users WHERE name=$1")
+        .bind(&payload.login)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| Error::LoginDoesntExist)?;
+
+    // TODO: password hashing
+    if output.password != payload.password {
+        return Err(Error::LoginBadPassword);
+    }
+
+    let claims_content = JWTClaims {
+        id: output.id,
+        privileges: output.privileges,
+    };
+
+    let claims = Claims::with_custom_claims(claims_content, Duration::from_hours(2));
+    let token = state
+        .jwt_key
+        .authenticate(claims)
+        .map_err(|_| Error::LoginFailedToGenerateToken)?;
+
+    // create cookie
+    cookies.add(Cookie::new(AUTH_COOKIE_KEY, token));
+
+    Ok(())
+}

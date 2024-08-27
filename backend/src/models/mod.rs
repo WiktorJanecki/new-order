@@ -1,8 +1,8 @@
 // Users
-mod user;
+pub mod user;
 
 // Orders containing items
-mod order;
+pub mod order;
 
 // Order items
-mod item;
+pub mod item;

@@ -1,6 +1,9 @@
 // User, UserForCreate
 
-#[derive(sqlx::Type)]
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+
+#[derive(Serialize, Deserialize, sqlx::Type)]
 pub enum Privileges {
     // Add new orders, see orders
     Basic,
@@ -9,9 +12,10 @@ pub enum Privileges {
     Full,
 }
 
+#[derive(FromRow)]
 pub struct User {
-    id: i32,
-    name: String,
-    password: String,
-    privileges: Privileges,
+    pub id: i32,
+    pub name: String,
+    pub password: String,
+    pub privileges: Privileges,
 }

@@ -1,9 +1,9 @@
 use std::time::SystemTime;
 
 pub struct Order {
-    id: i32,
-    creator_id: i32,
-    time_created: SystemTime,
-    receiver: String,
-    additional_info: Option<String>,
+    pub id: i32,
+    pub creator_id: i32,
+    pub time_created: SystemTime,
+    pub receiver: String,
+    pub additional_info: Option<String>,
 }
