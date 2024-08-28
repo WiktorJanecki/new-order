@@ -1,4 +1,8 @@
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use jwt_simple::{
     claims::Claims,
     prelude::{Duration, MACLike},
@@ -7,10 +11,21 @@ use serde::Deserialize;
 use tower_cookies::{Cookie, Cookies};
 use tracing::trace;
 
-use crate::{error::Result, models::user::User, AppState, Error, JWTClaims, AUTH_COOKIE_KEY};
+use crate::{
+    error::Result, models::user::User, session::Session, AppState, Error, JWTClaims,
+    AUTH_COOKIE_KEY,
+};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/login", post(login))
+    Router::new()
+        .route("/login", post(login))
+        .route("/token", get(token))
+}
+
+// just verify the token
+async fn token(_: Session) -> Result<()> {
+    trace!(" -- HANDLER /token");
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -25,7 +40,7 @@ async fn login(
     payload: Json<LoginPaylod>,
 ) -> Result<()> {
     trace!(
-        " -- HANDLER /login with {} {}",
+        " -- HANDLER /login ({} {})",
         &payload.login,
         &payload.password
     );

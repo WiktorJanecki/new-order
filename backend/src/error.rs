@@ -11,6 +11,8 @@ pub enum Error {
     LoginDoesntExist,
     LoginBadPassword,
     LoginFailedToGenerateToken,
+    AuthMissingCookie,
+    AuthBadToken,
 }
 
 impl IntoResponse for Error {

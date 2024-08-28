@@ -1,9 +1,12 @@
 use std::str::FromStr;
 
-use reqwest::{header::SET_COOKIE, StatusCode};
+use reqwest::{
+    header::{self, SET_COOKIE},
+    StatusCode,
+};
 use serde::Serialize;
 use tower_cookies::Cookie;
-use tracing::info;
+use tracing::{info, Instrument};
 
 mod common;
 
@@ -68,6 +71,40 @@ async fn login() -> anyhow::Result<()> {
     let cookie = Cookie::from_str(token);
 
     assert!(cookie.is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn token() -> anyhow::Result<()> {
+    let api_path = common::get_api_path()?;
+    let client = reqwest::ClientBuilder::new().cookie_store(true).build()?;
+
+    // token without cookie
+    let res = client.get(api_path.clone() + "/token").send().await?;
+    assert!(res.status() != StatusCode::OK);
+
+    // token with bad cookie
+    let res = client
+        .get(api_path.clone() + "/token")
+        .header(header::COOKIE, "AUTH_TOKEN=failed")
+        .send()
+        .await?;
+    assert!(res.status() != StatusCode::OK);
+
+    // ok
+    let payload = LoginPayload {
+        login: "boss".to_owned(),
+        password: "123".to_owned(),
+    };
+    let res = client
+        .post(&format!("{api_path}/login"))
+        .json(&payload)
+        .send()
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let res = client.get(api_path.clone() + "/token").send().await?;
+    assert_eq!(res.status(), StatusCode::OK);
 
     Ok(())
 }

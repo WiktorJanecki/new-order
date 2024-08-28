@@ -12,7 +12,11 @@ async fn main() -> anyhow::Result<()> {
 
     // print tracing with .env configuration
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().without_time())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .without_time()
+                .with_target(false),
+        )
         .with(tracing_subscriber::filter::EnvFilter::from_default_env())
         .init();
 
