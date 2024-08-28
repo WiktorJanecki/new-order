@@ -17,11 +17,12 @@ dotenv = {version="0.15.0", default-features=false}
 jwt-simple = {version="0.12.9", default-features=false, features=["pure-rust"]}
 serde = { version = "1.0.209", features = ["derive"], default-features=false }
 serde_json = {version="1.0.127", default-features=false}
-sqlx = { version = "0.8.1",default-features=false, features = ["derive", "postgres", "runtime-tokio"] }
+sqlx = { version = "0.8.1", default-features = false, features = ["chrono", "derive", "postgres", "runtime-tokio"] }
 tower-cookies = {version="0.10.0"}
 tower-http = { version = "0.5.2", features = ["fs", "trace"] }
 tracing = {version="0.1.40"}
 tracing-subscriber = { version = "0.3.18",features = ["env-filter"] }
+chrono = { version = "0.4.38", features = ["serde"] }
 
 [dev-dependencies]
 reqwest = { version = "0.12.7",default-features=false, features = ["cookies", "json", "rustls-tls"] }

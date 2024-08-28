@@ -13,6 +13,8 @@ pub enum Error {
     LoginFailedToGenerateToken,
     AuthMissingCookie,
     AuthBadToken,
+    AuthNoAccess,
+    SQLFail,
 }
 
 impl IntoResponse for Error {
