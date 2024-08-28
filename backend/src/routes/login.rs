@@ -24,7 +24,7 @@ pub fn routes() -> Router<AppState> {
 
 // just verify the token
 async fn token(_: Session) -> Result<()> {
-    trace!(" -- HANDLER /token");
+    trace!(" -- HANDLER GET /token");
     Ok(())
 }
 
@@ -40,7 +40,7 @@ async fn login(
     payload: Json<LoginPaylod>,
 ) -> Result<()> {
     trace!(
-        " -- HANDLER /login ({} {})",
+        " -- HANDLER POST /login ({} {})",
         &payload.login,
         &payload.password
     );

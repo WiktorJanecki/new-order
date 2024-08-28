@@ -1,5 +1,4 @@
-use axum::Json;
-use serde_json::{json, Value};
+use tracing::{trace, warn};
 
 use crate::{
     models::{
@@ -10,9 +9,10 @@ use crate::{
     Db, Error, Result,
 };
 
-pub async fn create(session: Session, payload: OrderForCreate, db: Db) -> Result<Json<Value>> {
+pub async fn create(session: Session, payload: OrderForCreate, db: Db) -> Result<i32> {
+    trace!(" -- CONTROLLER order::create");
     let creator_id = session.id();
-    let time_created = chrono::Local::now();
+    let time_created = chrono::Local::now().naive_local();
     let res: (i32, ) = sqlx::query_as("INSERT INTO orders (creator_id,time_created,receiver,additional_info) VALUES ($1,$2,$3,$4) RETURNING id")
         .bind(creator_id)
         .bind(time_created)
@@ -20,33 +20,33 @@ pub async fn create(session: Session, payload: OrderForCreate, db: Db) -> Result
         .bind(payload.additional_info)
         .fetch_one(&db).await.map_err(|_|Error::SQLFail)?;
 
-    let output = json!({
-        "id": res.0
-    });
-    Ok(Json(output))
+    Ok(res.0)
 }
 
-pub async fn read(_session: Session, payload: i32, db: Db) -> Result<Json<Order>> {
+pub async fn read(_session: Session, payload: i32, db: Db) -> Result<Order> {
+    trace!(" -- CONTROLLER order::read");
     let res: Order = sqlx::query_as("SELECT * FROM orders WHERE id = $1")
         .bind(payload)
         .fetch_one(&db)
         .await
         .map_err(|_| Error::SQLFail)?;
-    Ok(Json(res))
+    Ok(res)
 }
 
-pub async fn read_all(_session: Session, db: Db) -> Result<Json<Vec<Order>>> {
+pub async fn read_all(_session: Session, db: Db) -> Result<Vec<Order>> {
+    trace!(" -- CONTROLLER order::read_all");
     let res: Vec<Order> = sqlx::query_as("SELECT * FROM orders")
         .fetch_all(&db)
         .await
         .map_err(|_| Error::SQLFail)?;
-    Ok(Json(res))
+    Ok(res)
 }
 
 pub async fn update(_session: Session, id: i32, payload: OrderForUpdate, db: Db) -> Result<()> {
+    trace!(" -- CONTROLLER order::update");
     sqlx::query(
         "
-            UPDATE users SET 
+            UPDATE orders SET 
                 receiver=COALESCE($1,receiver),
                 additional_info=COALESCE($2, additional_info)
             WHERE id=$3
@@ -63,8 +63,10 @@ pub async fn update(_session: Session, id: i32, payload: OrderForUpdate, db: Db)
 
 // only full privileges can hard delete orders
 pub async fn delete(session: Session, id: i32, db: Db) -> Result<()> {
+    trace!(" -- CONTROLLER order::delete");
     // return early if privileges are not full
     if !matches!(session.privileges(), Privileges::Full) {
+        warn!("Tried to delete order with basic privileges");
         return Err(Error::AuthNoAccess);
     }
     sqlx::query(
