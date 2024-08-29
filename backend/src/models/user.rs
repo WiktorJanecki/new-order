@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-#[derive(Serialize, Deserialize, sqlx::Type)]
+#[derive(Serialize, Deserialize, sqlx::Type, Clone)]
 pub enum Privileges {
     // Add new orders, see orders
     Basic,

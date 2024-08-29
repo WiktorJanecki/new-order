@@ -6,7 +6,7 @@ use tracing::error;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     LoginDoesntExist,
     LoginBadPassword,
@@ -15,6 +15,7 @@ pub enum Error {
     AuthBadToken,
     AuthNoAccess,
     SQLFail,
+    SQLEntityNotFound { entity_type: &'static str, id: i32 },
 }
 
 impl IntoResponse for Error {
@@ -31,3 +32,10 @@ impl core::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<sqlx::Error> for Error {
+    fn from(value: sqlx::Error) -> Self {
+        error!("{value:?}");
+        Error::SQLFail
+    }
+}

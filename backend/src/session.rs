@@ -11,6 +11,7 @@ use tracing::trace;
 use crate::{models::user::Privileges, AppState, Error, JWTClaims, Result, AUTH_COOKIE_KEY};
 
 // id and privileges read only
+#[derive(Clone)]
 pub struct Session {
     id: i32,
     privileges: Privileges,
@@ -25,6 +26,23 @@ impl Session {
     }
     pub fn privileges(self) -> Privileges {
         self.privileges
+    }
+
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    pub fn BASIC() -> Self {
+        Self {
+            id: 0,
+            privileges: Privileges::Basic,
+        }
+    }
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    pub fn FULL() -> Self {
+        Self {
+            id: 0,
+            privileges: Privileges::Full,
+        }
     }
 }
 

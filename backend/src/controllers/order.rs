@@ -1,9 +1,10 @@
-use tracing::{trace, warn};
+use tracing::trace;
 
 use crate::{
+    controllers,
     models::{
-        order::{Order, OrderForCreate, OrderForUpdate},
-        user::Privileges,
+        item::{Item, ItemResponseBasic},
+        order::{Order, OrderForCreate, OrderForUpdate, OrderResponseBasic},
     },
     session::Session,
     Db, Error, Result,
@@ -18,28 +19,72 @@ pub async fn create(session: Session, payload: OrderForCreate, db: Db) -> Result
         .bind(time_created)
         .bind(payload.receiver)
         .bind(payload.additional_info)
-        .fetch_one(&db).await.map_err(|_|Error::SQLFail)?;
+        .fetch_one(&db).await?;
 
     Ok(res.0)
 }
 
-pub async fn read(_session: Session, payload: i32, db: Db) -> Result<Order> {
+// TODO: UNIT TEST ALL FUNCTIONS HERE
+// unit test this TODO:
+fn order_and_items_into_response(res: Order, items: Vec<Item>) -> OrderResponseBasic {
+    let mapped_items = items
+        .iter()
+        .map(|item| ItemResponseBasic {
+            id: item.id,
+            order_id: item.order_id,
+            time_created: item.time_created,
+            quantity: item.quantity.to_string(),
+            name: item.name.to_string(),
+            value: item.value,
+            additional_info: item.additional_info.to_owned(),
+        })
+        .collect::<Vec<_>>();
+
+    // combine output
+
+    let output = OrderResponseBasic {
+        id: res.id,
+        time_created: res.time_created,
+        receiver: res.receiver,
+        additional_info: res.additional_info,
+        items: mapped_items,
+    };
+    output
+}
+pub async fn read(session: Session, payload: i32, db: Db) -> Result<OrderResponseBasic> {
     trace!(" -- CONTROLLER order::read");
+
+    // get order data
     let res: Order = sqlx::query_as("SELECT * FROM orders WHERE id = $1")
         .bind(payload)
-        .fetch_one(&db)
-        .await
-        .map_err(|_| Error::SQLFail)?;
-    Ok(res)
+        .fetch_optional(&db)
+        .await?
+        .ok_or(Error::SQLEntityNotFound {
+            entity_type: "order",
+            id: payload,
+        })?;
+    // get its items
+    let items = controllers::item::read_where_order_id(session, res.id, db.clone()).await?;
+
+    // combine
+    let combined = order_and_items_into_response(res, items);
+
+    // return
+    Ok(combined)
 }
 
-pub async fn read_all(_session: Session, db: Db) -> Result<Vec<Order>> {
+pub async fn list(session: Session, db: Db) -> Result<Vec<OrderResponseBasic>> {
     trace!(" -- CONTROLLER order::read_all");
     let res: Vec<Order> = sqlx::query_as("SELECT * FROM orders")
         .fetch_all(&db)
-        .await
-        .map_err(|_| Error::SQLFail)?;
-    Ok(res)
+        .await?;
+    let mut mapped = vec![];
+    for order in res {
+        let items =
+            controllers::item::read_where_order_id(session.clone(), order.id, db.clone()).await?;
+        mapped.push(order_and_items_into_response(order, items));
+    }
+    Ok(mapped)
 }
 
 pub async fn update(_session: Session, id: i32, payload: OrderForUpdate, db: Db) -> Result<()> {
@@ -56,27 +101,6 @@ pub async fn update(_session: Session, id: i32, payload: OrderForUpdate, db: Db)
     .bind(payload.additional_info)
     .bind(id)
     .execute(&db)
-    .await
-    .map_err(|_| Error::SQLFail)?;
-    Ok(())
-}
-
-// only full privileges can hard delete orders
-pub async fn delete(session: Session, id: i32, db: Db) -> Result<()> {
-    trace!(" -- CONTROLLER order::delete");
-    // return early if privileges are not full
-    if !matches!(session.privileges(), Privileges::Full) {
-        warn!("Tried to delete order with basic privileges");
-        return Err(Error::AuthNoAccess);
-    }
-    sqlx::query(
-        "
-            DELETE FROM orders WHERE id=$1
-        ",
-    )
-    .bind(id)
-    .execute(&db)
-    .await
-    .map_err(|_| Error::SQLFail)?;
+    .await?;
     Ok(())
 }

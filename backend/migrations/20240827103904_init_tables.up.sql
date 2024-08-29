@@ -14,7 +14,9 @@ CREATE TABLE orders(
     creator_id INT NOT NULL,
     time_created TIMESTAMP NOT NULL,
     receiver VARCHAR NOT NULL,
-    additional_info VARCHAR 
+    additional_info VARCHAR, 
+    deleted BOOLEAN NOT NULL,
+    paid BOOLEAN NOT NULL
 );
 
 CREATE TABLE items(
@@ -26,5 +28,6 @@ CREATE TABLE items(
     quantity VARCHAR NOT NULL,
     name VARCHAR NOT NULL,
     value INT NOT NULL,
-    additional_info VARCHAR
+    additional_info VARCHAR,
+    deleted BOOLEAN NOT NULL
 );
