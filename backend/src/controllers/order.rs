@@ -14,7 +14,7 @@ pub async fn create(session: Session, payload: OrderForCreate, db: Db) -> Result
     trace!(" -- CONTROLLER order::create");
     let creator_id = session.id();
     let time_created = chrono::Local::now().naive_local();
-    let res: (i32, ) = sqlx::query_as("INSERT INTO orders (creator_id,time_created,receiver,additional_info) VALUES ($1,$2,$3,$4) RETURNING id")
+    let res: (i32, ) = sqlx::query_as("INSERT INTO orders (creator_id,time_created,receiver,additional_info,deleted,paid) VALUES ($1,$2,$3,$4, false,false) RETURNING id")
         .bind(creator_id)
         .bind(time_created)
         .bind(payload.receiver)
