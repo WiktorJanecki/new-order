@@ -23,7 +23,7 @@ pub struct ItemForCreate {
     pub additional_info: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ItemResponseBasic {
     pub id: i32,
     pub order_id: i32,

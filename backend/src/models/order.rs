@@ -14,6 +14,7 @@ pub struct Order {
     pub paid: bool,
 }
 
+#[derive(Clone)]
 pub struct OrderForCreate {
     pub receiver: String,
     pub additional_info: Option<String>,
@@ -24,7 +25,7 @@ pub struct OrderForUpdate {
     pub additional_info: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct OrderResponseBasic {
     pub id: i32,
     pub time_created: chrono::NaiveDateTime,

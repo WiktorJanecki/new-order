@@ -9,7 +9,7 @@ use tracing::trace;
 
 use crate::{
     controllers,
-    models::order::{Order, OrderForCreate, OrderForUpdate, OrderResponseBasic},
+    models::order::{OrderForCreate, OrderForUpdate, OrderResponseBasic},
     session::Session,
     AppState, Result,
 };
@@ -17,7 +17,7 @@ use crate::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/orders", post(create).get(read_all))
-        .route("/orders/:id", get(read).patch(update))
+        .route("/orders/:id", get(read).patch(update).delete(delete))
 }
 
 // POST /orders
@@ -86,5 +86,16 @@ async fn update(
         additional_info: payload.additional_info.clone(),
     };
     controllers::order::update(session, id, orderfu, db).await?;
+    Ok(())
+}
+
+async fn delete(
+    session: Session,
+    AppState { db, .. }: AppState,
+    Path(id): Path<i32>,
+) -> Result<()> {
+    trace!(" -- HANDLER DELETE /orders/{}", id);
+
+    controllers::order::delete(session, id, db).await?;
     Ok(())
 }
