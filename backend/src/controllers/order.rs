@@ -4,7 +4,7 @@ use crate::{
     controllers,
     models::{
         item::{Item, ItemResponseBasic},
-        order::{Order, OrderForCreate, OrderForUpdate, OrderResponseBasic},
+        order::{Order, OrderForCreate, OrderForUpdate, OrderListParams, OrderResponseBasic},
     },
     session::Session,
     Db, Error, Result,
@@ -71,10 +71,37 @@ pub async fn read(session: Session, payload: i32, db: Db) -> Result<OrderRespons
 }
 
 pub async fn list(session: Session, db: Db) -> Result<Vec<OrderResponseBasic>> {
-    trace!(" -- CONTROLLER order::read_all");
+    trace!(" -- CONTROLLER order::list");
     let res: Vec<Order> = sqlx::query_as("SELECT * FROM orders WHERE deleted=false")
         .fetch_all(&db)
         .await?;
+    let mut mapped = vec![];
+    for order in res {
+        let items =
+            controllers::item::read_where_order_id(session.clone(), order.id, db.clone()).await?;
+        mapped.push(order_and_items_into_response(order, items));
+    }
+    Ok(mapped)
+}
+
+pub async fn list_with_params(
+    session: Session,
+    params: OrderListParams,
+    db: Db,
+) -> Result<Vec<OrderResponseBasic>> {
+    trace!(" -- CONTROLLER order::list_with_params");
+
+    let mut builder = sqlx::QueryBuilder::new("SELECT * FROM orders WHERE deleted=false ");
+    if let Some(ds) = params.date_start {
+        builder.push(" AND time_created::date >= ");
+        builder.push_bind(ds);
+    }
+    if let Some(de) = params.date_end {
+        builder.push(" AND time_created::date <= ");
+        builder.push_bind(de);
+    }
+    let query = builder.build_query_as::<Order>();
+    let res: Vec<Order> = query.fetch_all(&db).await?;
     let mut mapped = vec![];
     for order in res {
         let items =
@@ -147,8 +174,8 @@ mod tests {
         assert_eq!(order.id, id);
         assert_eq!(order.receiver, "tomek");
         assert_eq!(order.creator_id, Session::BASIC().id());
-        assert_eq!(order.deleted, false);
-        assert_eq!(order.paid, false);
+        assert!(!order.deleted);
+        assert!(!order.paid);
 
         Ok(())
     }
@@ -253,7 +280,215 @@ mod tests {
 
     #[sqlx::test]
     async fn order_list_deleted(pool: Db) -> Result<()> {
-        // TODO
+        let order_fc = OrderForCreate {
+            receiver: "tomek".to_owned(),
+            additional_info: None,
+        };
+        let _order_id_1 =
+            controllers::order::create(Session::BASIC(), order_fc.clone(), pool.clone()).await?;
+        let order_id_2 =
+            controllers::order::create(Session::BASIC(), order_fc.clone(), pool.clone()).await?;
+        let _order_id_3 =
+            controllers::order::create(Session::BASIC(), order_fc, pool.clone()).await?;
+        let vec = controllers::order::list(Session::BASIC(), pool.clone()).await?;
+        assert_eq!(vec.len(), 3);
+
+        controllers::order::delete(Session::BASIC(), order_id_2, pool.clone()).await?;
+
+        let vec = controllers::order::list(Session::BASIC(), pool.clone()).await?;
+        assert_eq!(vec.len(), 2);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn order_list_with_date_start(pool: Db) -> Result<()> {
+        let time = chrono::Local::now().time();
+        let day4 = chrono::NaiveDate::from_ymd_opt(2005, 5, 4).unwrap();
+        let day5 = chrono::NaiveDate::from_ymd_opt(2005, 5, 5).unwrap();
+        let day6 = chrono::NaiveDate::from_ymd_opt(2005, 5, 6).unwrap();
+
+        let time_created = chrono::NaiveDateTime::new(day4, time);
+        let _: (i32,) = sqlx::query_as(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false) RETURNING id
+                ",
+        )
+        .bind(time_created)
+        .fetch_one(&pool)
+        .await?;
+
+        let time_created = chrono::NaiveDateTime::new(day5, time);
+        let _: (i32,) = sqlx::query_as(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false) RETURNING id
+                ",
+        )
+        .bind(time_created)
+        .fetch_one(&pool)
+        .await?;
+
+        let time_created = chrono::NaiveDateTime::new(day6, time);
+        let _: (i32,) = sqlx::query_as(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false) RETURNING id
+                ",
+        )
+        .bind(time_created)
+        .fetch_one(&pool)
+        .await?;
+
+        let params_all = OrderListParams {
+            date_start: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 2).unwrap()),
+            date_end: None,
+        };
+        let all = controllers::order::list_with_params(Session::BASIC(), params_all, pool.clone())
+            .await?;
+        assert_eq!(all.len(), 3);
+
+        let params_middle = OrderListParams {
+            date_start: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 5).unwrap()),
+            date_end: None,
+        };
+        let middle =
+            controllers::order::list_with_params(Session::BASIC(), params_middle, pool.clone())
+                .await?;
+        assert_eq!(middle.len(), 2);
+
+        let params_none = OrderListParams {
+            date_start: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 8).unwrap()),
+            date_end: None,
+        };
+        let none =
+            controllers::order::list_with_params(Session::BASIC(), params_none, pool.clone())
+                .await?;
+        assert_eq!(none.len(), 0);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn order_list_with_date_end(pool: Db) -> Result<()> {
+        let time = chrono::Local::now().time();
+        let day4 = chrono::NaiveDate::from_ymd_opt(2005, 5, 4).unwrap();
+        let day5 = chrono::NaiveDate::from_ymd_opt(2005, 5, 5).unwrap();
+        let day6 = chrono::NaiveDate::from_ymd_opt(2005, 5, 6).unwrap();
+
+        let time_created = chrono::NaiveDateTime::new(day4, time);
+        let _: (i32,) = sqlx::query_as(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false) RETURNING id
+                ",
+        )
+        .bind(time_created)
+        .fetch_one(&pool)
+        .await?;
+
+        let time_created = chrono::NaiveDateTime::new(day5, time);
+        let _: (i32,) = sqlx::query_as(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false) RETURNING id
+                ",
+        )
+        .bind(time_created)
+        .fetch_one(&pool)
+        .await?;
+
+        let time_created = chrono::NaiveDateTime::new(day6, time);
+        let _: (i32,) = sqlx::query_as(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false) RETURNING id
+                ",
+        )
+        .bind(time_created)
+        .fetch_one(&pool)
+        .await?;
+
+        let params_all = OrderListParams {
+            date_start: None,
+            date_end: Some(chrono::NaiveDate::from_ymd_opt(2008, 1, 1).unwrap()),
+        };
+        let all = controllers::order::list_with_params(Session::BASIC(), params_all, pool.clone())
+            .await?;
+        assert_eq!(all.len(), 3);
+
+        let params_middle = OrderListParams {
+            date_start: None,
+            date_end: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 5).unwrap()),
+        };
+        let middle =
+            controllers::order::list_with_params(Session::BASIC(), params_middle, pool.clone())
+                .await?;
+        assert_eq!(middle.len(), 2);
+
+        let params_none = OrderListParams {
+            date_start: None,
+            date_end: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 2).unwrap()),
+        };
+        let none =
+            controllers::order::list_with_params(Session::BASIC(), params_none, pool.clone())
+                .await?;
+        assert_eq!(none.len(), 0);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn order_list_with_date(pool: Db) -> Result<()> {
+        let time = chrono::Local::now().time();
+        let day4 = chrono::NaiveDate::from_ymd_opt(2005, 5, 4).unwrap();
+        let day5 = chrono::NaiveDate::from_ymd_opt(2005, 5, 5).unwrap();
+        let day6 = chrono::NaiveDate::from_ymd_opt(2005, 5, 6).unwrap();
+        let day7 = chrono::NaiveDate::from_ymd_opt(2005, 5, 7).unwrap();
+        let day8 = chrono::NaiveDate::from_ymd_opt(2005, 5, 8).unwrap();
+
+        sqlx::query(
+            "
+            INSERT INTO orders
+                (creator_id,time_created,receiver,additional_info,deleted,paid)
+            VALUES
+                (0,$1,'tomek',NULL,false,false),
+                (0,$2,'tomek',NULL,false,false),
+                (0,$3,'tomek',NULL,false,false),
+                (0,$4,'tomek',NULL,false,false),
+                (0,$5,'tomek',NULL,false,false)
+                ",
+        )
+        .bind(chrono::NaiveDateTime::new(day4, time))
+        .bind(chrono::NaiveDateTime::new(day5, time))
+        .bind(chrono::NaiveDateTime::new(day6, time))
+        .bind(chrono::NaiveDateTime::new(day7, time))
+        .bind(chrono::NaiveDateTime::new(day8, time))
+        .execute(&pool)
+        .await?;
+
+        let params_three = OrderListParams {
+            date_start: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 5).unwrap()),
+            date_end: Some(chrono::NaiveDate::from_ymd_opt(2005, 5, 7).unwrap()),
+        };
+        let three =
+            controllers::order::list_with_params(Session::BASIC(), params_three, pool.clone())
+                .await?;
+        assert_eq!(three.len(), 3);
+
         Ok(())
     }
 

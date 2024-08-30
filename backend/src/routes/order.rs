@@ -1,5 +1,5 @@
 use axum::{
-    extract::Path,
+    extract::{Path, Query},
     routing::{get, post},
     Json, Router,
 };
@@ -9,14 +9,14 @@ use tracing::trace;
 
 use crate::{
     controllers,
-    models::order::{OrderForCreate, OrderForUpdate, OrderResponseBasic},
+    models::order::{OrderForCreate, OrderForUpdate, OrderListParams, OrderResponseBasic},
     session::Session,
     AppState, Result,
 };
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/orders", post(create).get(read_all))
+        .route("/orders", post(create).get(list))
         .route("/orders/:id", get(read).patch(update).delete(delete))
 }
 
@@ -59,11 +59,16 @@ async fn read(
     Ok(Json(output))
 }
 
-async fn read_all(
+async fn list(
     session: Session,
     AppState { db, .. }: AppState,
+    params: Option<Query<OrderListParams>>,
 ) -> Result<Json<Vec<OrderResponseBasic>>> {
     trace!(" -- HANDLER GET /orders");
+    if let Some(Query(params)) = params {
+        let output = controllers::order::list_with_params(session, params, db).await?;
+        return Ok(Json(output));
+    }
     let output = controllers::order::list(session, db).await?;
     Ok(Json(output))
 }

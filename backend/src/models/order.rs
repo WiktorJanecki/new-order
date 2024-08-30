@@ -33,3 +33,10 @@ pub struct OrderResponseBasic {
     pub additional_info: Option<String>,
     pub items: Vec<ItemResponseBasic>,
 }
+#[derive(Deserialize)]
+pub struct OrderListParams {
+    #[serde(alias = "dateStart")]
+    pub date_start: Option<chrono::NaiveDate>,
+    #[serde(alias = "dateEnd")]
+    pub date_end: Option<chrono::NaiveDate>,
+}

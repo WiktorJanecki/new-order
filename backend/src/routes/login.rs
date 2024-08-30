@@ -51,7 +51,7 @@ async fn login(
         .await
         .map_err(|_| Error::LoginDoesntExist)?;
 
-    // TODO: password hashing
+    // TODO: password hashing (not really necessary)
     if output.password != payload.password {
         return Err(Error::LoginBadPassword);
     }

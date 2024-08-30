@@ -6,7 +6,6 @@ use reqwest::{
 };
 use serde::Serialize;
 use tower_cookies::Cookie;
-use tracing::{info, Instrument};
 
 mod common;
 
