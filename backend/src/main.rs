@@ -3,7 +3,7 @@ use backend::{middlewares::mw_tracing, routes, AppState};
 use jwt_simple::prelude::HS256Key;
 use sqlx::postgres::PgPoolOptions;
 use tower_cookies::CookieManagerLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::prelude::*;
 
 #[tokio::main]
@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api", routes::routes())
         .layer(TraceLayer::new_for_http())
         .layer(CookieManagerLayer::new())
+        .layer(CorsLayer::very_permissive())
         .layer(middleware::map_response(mw_tracing)) // new line for each request
         .with_state(state);
 
