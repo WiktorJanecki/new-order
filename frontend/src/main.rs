@@ -6,6 +6,7 @@ use login::LoginView;
 use order::OrderView;
 use thaw::*;
 
+pub mod components;
 mod home;
 mod list;
 mod login;

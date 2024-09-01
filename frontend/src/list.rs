@@ -1,25 +1,16 @@
+use crate::components::{list_filters::ListFilter, order_card::OrderCard};
 use anyhow::{bail, Result};
-use chrono::{Datelike, Days};
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use reqwest::StatusCode;
 use thaw::*;
 
-use crate::{
-    model::{ItemResponseBasic, OrderResponseBasic},
-    API_PATH,
-};
+use crate::{model::OrderResponseBasic, API_PATH};
 
 #[component]
 pub fn ListView() -> impl IntoView {
     let params = create_rw_signal(String::from(""));
-    let date_picker_start = create_rw_signal(Some(chrono::Local::now().date_naive()));
-    let date_picker_end = create_rw_signal(
-        chrono::Local::now()
-            .date_naive()
-            .checked_add_days(Days::new(1)),
-    );
     let res = create_resource(
         move || params,
         |params| async move {
@@ -32,32 +23,6 @@ pub fn ListView() -> impl IntoView {
             }
         },
     );
-    let show_filters = create_rw_signal(false);
-    let show_today = move |_| {
-        let today = chrono::Local::now().naive_local().date().to_string();
-        params.set(format!("?date_start={}", today));
-        res.refetch();
-    };
-    let show_this_month = move |_| {
-        let today = chrono::Local::now().naive_local().date();
-        let this_month = chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
-            .expect("day 1 so can't panic");
-        params.set(format!("?date_start={}", this_month));
-        res.refetch();
-    };
-    let show_all = move |_| {
-        params.set("".to_owned());
-        res.refetch();
-    };
-    let filter = move |_| {
-        params.set(format!(
-            "?date_start={}&date_end={}",
-            date_picker_start.get_untracked().unwrap(),
-            date_picker_end.get_untracked().unwrap()
-        ));
-        res.refetch();
-        show_filters.set(false);
-    };
     let back = move |_| {
         let nav = use_navigate();
         nav("/", Default::default());
@@ -78,105 +43,31 @@ pub fn ListView() -> impl IntoView {
                 left:0;
                 top:0px;
             }
-            .inner > div{
-                padding: 12px 0px !important;
-            }
             .padding{
                 padding: 0px 28px;
             }
-            .modal{
-                width:90vw;
-                max-width:500px;
-            }
-            .checked{
-                  background: repeating-linear-gradient(
-                    180deg,
-                    black 0%,
-                    black 100%
-                  );
-                  background-size: 100% 1px;
-                  background-position: center;
-                  background-repeat: no-repeat;
-            }
-            .checked_text > .thaw-collapse-item__header{
-                text-decoration:line-through;
-            }
         "
         </Style>
-        <Modal title="Filtry" show=show_filters class="modal" width="90vw">
-            <Space vertical=true>
-                <Space>
-                {"Od (włącznie)"}
-                <DatePicker value=date_picker_start/>
-                </Space>
-
-                <Space>
-                {"Do (włącznie)"}
-                <DatePicker value=date_picker_end/>
-                </Space>
-                <Button on_click=filter block=true>"Filtruj"</Button>
-            </Space>
-        </Modal>
         <div class="stripe"></div>
         <div style="padding:0 30px;">
         <h1>"Zamówienia: "</h1>
         <Space>
-        <ButtonGroup>
-        <Button variant=ButtonVariant::Outlined on_click=show_today>"Dzisiaj"</Button>
-        <Button variant=ButtonVariant::Outlined on_click=show_this_month>{this_month_in_polish}</Button>
-        <Button variant=ButtonVariant::Outlined on_click=show_all>"Wszystko"</Button>
-        <Button variant=ButtonVariant::Outlined on_click=move |_| show_filters.set(true)>"Inne"</Button>
-        </ButtonGroup>
+            <ListFilter params=params res=res />
         </Space>
         <br/>
         <br/>
         <Collapse>
+        {
+            move || match res.get() {
+                None => view!{<Space justify=SpaceJustify::Center><Spinner/></Space>}.into_view(),
+                Some(s) => { s.iter().cloned().map(|order: OrderResponseBasic|{view!{
+                    <CollapseItem class={if is_order_checked(&order) {"checked_text"} else {""}} key={order.id.to_string()}  title={order.receiver.to_owned()}>
+                        <OrderCard order=order />
+                    </CollapseItem>
+                }}).collect::<Vec<_>>().into_view()},
 
-            {
-               move|| match res.get() {
-                    None => view!{<Space justify=SpaceJustify::Center><Spinner/></Space>}.into_view(),
-                    Some(s) => { s.iter().cloned().map(|order: OrderResponseBasic|{view!{
-                        <CollapseItem class={if is_order_checked(&order) {"checked_text"} else {""}} key={order.id.to_string()}  title={order.receiver.to_owned()}>
-                            <Card class="inner">
-                                <div class="padding">
-                                    <br/>
-                                    <Space justify=SpaceJustify::SpaceBetween>
-                                        {order.time_created.format("%H:%M").to_string()}
-                                        {order.time_created.format("%d.%m.%Y").to_string()}
-                                    </Space>
-                                    <Divider />
-                                    <Space justify=SpaceJustify::SpaceBetween>{"Dla: ".to_owned()}{order.receiver}</Space>
-                                    <Divider />
-                                    <Space justify=SpaceJustify::Center>"Zawartość"</Space>
-                                    <br/>
-                                </div>
-                                <Table>
-                                    <thead>
-                                        <th>"ilość"</th>
-                                        <th>"Nazwa"</th>
-                                        <th>"Wartość"</th>
-                                    </thead>
-                                   {order.items.iter().cloned().map(|item: ItemResponseBasic|view!{
-                                           <tr class={if item.checked {"checked"} else {""}}>
-                                           <td>{item.quantity}</td>
-                                           <td>
-                                           {item.name}
-                                           </td>
-                                           <td>{format!("{}.{:02} zł",item.value/100,item.value%100)}</td>
-                                           </tr>
-                                   }).collect::<Vec<_>>()}
-                               </Table>
-                               <br/>
-                               <div class="padding">
-                               {"Dodatkowe informacje: ".to_owned() + order.additional_info.unwrap_or("".to_owned()).as_ref()}
-                               </div>
-
-                            </Card>
-                        </CollapseItem>
-                    }}).collect::<Vec<_>>().into_view()},
-
-                }
             }
+        }
         </Collapse>
         <Divider/>
         <Space justify=SpaceJustify::Center>
@@ -199,25 +90,6 @@ async fn fetch_orders(params: String) -> Result<Vec<OrderResponseBasic>> {
     }
     let vec: Vec<OrderResponseBasic> = res.json().await?;
     Ok(vec)
-}
-
-fn this_month_in_polish() -> &'static str {
-    let month = chrono::Local::now().naive_local().date().month0() + 1; // 1-12
-    match month {
-        1 => "Styczeń",
-        2 => "Luty",
-        3 => "Marzec",
-        4 => "Kwiecień",
-        5 => "Maj",
-        6 => "Czerwiec",
-        7 => "Lipiec",
-        8 => "Sierpień",
-        9 => "Wrzesień",
-        10 => "Październik",
-        11 => "Listopad",
-        12 => "Grudzień",
-        _ => "Miesiąc",
-    }
 }
 
 fn is_order_checked(order: &OrderResponseBasic) -> bool {
