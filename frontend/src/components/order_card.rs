@@ -1,5 +1,7 @@
+use anyhow::Result;
 use leptos::*;
 use leptos_meta::*;
+use leptos_router::use_navigate;
 use thaw::*;
 
 use crate::model::{ItemResponseBasic, OrderResponseBasic};
@@ -56,8 +58,16 @@ pub fn OrderCard(order: OrderResponseBasic) -> impl IntoView {
            <br/>
            <div class="padding">
                {"Dodatkowe informacje: ".to_owned() + order.additional_info.unwrap_or("".to_owned()).as_ref()}
+               <br/>
+               <br/>
+               <Button on_click=move|_|fetch_edit(order.id) block=true variant=ButtonVariant::Primary>"Edytuj zamówienie"</Button>
            </div>
 
         </Card>
     }
+}
+
+pub fn fetch_edit(id: i32) {
+    let nav = use_navigate();
+    nav(&format!("/orders/{id}"), Default::default());
 }
