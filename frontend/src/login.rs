@@ -30,7 +30,7 @@ pub fn LoginView() -> impl IntoView {
                     height:100%;
                 }
                 .fullheight {
-                    height:100%;
+                    height:calc(100% - 160px );
                 }
                 .card{
                     margin-right:10px;

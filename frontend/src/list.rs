@@ -30,25 +30,11 @@ pub fn ListView() -> impl IntoView {
 
     view! {
         <Style>"
-            * {
-                box-sizing: border-box;
-            }
-            body,html{
-                margin:0;
-            }
-            .stripe{
-                width:100vw;
-                height:40px;
-                background-color:#0078ff;
-                left:0;
-                top:0px;
-            }
             .padding{
                 padding: 0px 28px;
             }
         "
         </Style>
-        <div class="stripe"></div>
         <div style="padding:0 30px;">
         <h1>"Zamówienia: "</h1>
         <Space>

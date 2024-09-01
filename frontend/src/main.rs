@@ -1,5 +1,6 @@
 use home::HomeView;
 use leptos::*;
+use leptos_meta::*;
 use leptos_router::*;
 use list::ListView;
 use login::LoginView;
@@ -31,6 +32,22 @@ fn App() -> impl IntoView {
         <Router>
             <ThemeProvider theme>
                 <MessageProvider>
+                    <Style>"
+                        *{
+                            box-sizing: border-box;
+                        }
+                        html,body{
+                            margin:0;
+                        }
+                        .stripe{
+                            width:100vw;
+                            height:40px;
+                            background-color:#0078ff;
+                            left:0;
+                            top:0px;
+                        }
+                    "</Style>
+                    <div class="stripe"></div>
                     <Routes>
                         <Route path="/"           view=HomeView />
                         <Route path="/login"      view=LoginView />

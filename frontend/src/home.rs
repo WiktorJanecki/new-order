@@ -31,11 +31,7 @@ pub fn HomeView() -> impl IntoView {
     let mobile = window_size < 1000f64;
     view! {
         <Style>"
-            * {
-                box-sizing: border-box;
-            }
-            body,html{
-                margin:0;
+            html,body{
                 height:100%;
             }
             .card{
@@ -49,15 +45,8 @@ pub fn HomeView() -> impl IntoView {
             .fullheight {
                 height:calc(100% - 40px);
             }
-            .stripe{
-                width:100vw;
-                height:40px;
-                background-color:#0078ff;
-                left:0;
-                top:0px;
-            }
         "</Style>
-        <div class="stripe"></div>
+        <div></div>
         <Space class="fullheight" justify=SpaceJustify::Center align=SpaceAlign::Center>
                 {if mobile{view!{
                     // on mobile
