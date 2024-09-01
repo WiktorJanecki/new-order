@@ -88,6 +88,19 @@ pub fn ListView() -> impl IntoView {
                 width:90vw;
                 max-width:500px;
             }
+            .checked{
+                  background: repeating-linear-gradient(
+                    180deg,
+                    black 0%,
+                    black 100%
+                  );
+                  background-size: 100% 1px;
+                  background-position: center;
+                  background-repeat: no-repeat;
+            }
+            .checked_text > .thaw-collapse-item__header{
+                text-decoration:line-through;
+            }
         "
         </Style>
         <Modal title="Filtry" show=show_filters class="modal" width="90vw">
@@ -110,7 +123,7 @@ pub fn ListView() -> impl IntoView {
         <Space>
         <ButtonGroup>
         <Button variant=ButtonVariant::Outlined on_click=show_today>"Dzisiaj"</Button>
-        <Button variant=ButtonVariant::Outlined on_click=show_this_month>{||this_month_in_polish()}</Button>
+        <Button variant=ButtonVariant::Outlined on_click=show_this_month>{this_month_in_polish}</Button>
         <Button variant=ButtonVariant::Outlined on_click=show_all>"Wszystko"</Button>
         <Button variant=ButtonVariant::Outlined on_click=move |_| show_filters.set(true)>"Inne"</Button>
         </ButtonGroup>
@@ -121,9 +134,9 @@ pub fn ListView() -> impl IntoView {
 
             {
                move|| match res.get() {
-                    None => view!{<Spinner/>}.into_view(),
+                    None => view!{<Space justify=SpaceJustify::Center><Spinner/></Space>}.into_view(),
                     Some(s) => { s.iter().cloned().map(|order: OrderResponseBasic|{view!{
-                        <CollapseItem key={order.id.to_string()}  title={order.receiver.to_owned()}>
+                        <CollapseItem class={if is_order_checked(&order) {"checked_text"} else {""}} key={order.id.to_string()}  title={order.receiver.to_owned()}>
                             <Card class="inner">
                                 <div class="padding">
                                     <br/>
@@ -144,7 +157,7 @@ pub fn ListView() -> impl IntoView {
                                         <th>"Wartość"</th>
                                     </thead>
                                    {order.items.iter().cloned().map(|item: ItemResponseBasic|view!{
-                                           <tr>
+                                           <tr class={if item.checked {"checked"} else {""}}>
                                            <td>{item.quantity}</td>
                                            <td>
                                            {item.name}
@@ -205,4 +218,12 @@ fn this_month_in_polish() -> &'static str {
         12 => "Grudzień",
         _ => "Miesiąc",
     }
+}
+
+fn is_order_checked(order: &OrderResponseBasic) -> bool {
+    // if all items inside are checked
+    if order.items.is_empty() {
+        return false;
+    }
+    order.items.iter().all(|x| x.checked)
 }

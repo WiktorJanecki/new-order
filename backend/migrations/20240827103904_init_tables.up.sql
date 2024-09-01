@@ -29,5 +29,6 @@ CREATE TABLE items(
     name VARCHAR NOT NULL,
     value INT NOT NULL,
     additional_info VARCHAR,
-    deleted BOOLEAN NOT NULL
+    deleted BOOLEAN NOT NULL,
+    checked BOOLEAN DEFAULT false NOT NULL
 );

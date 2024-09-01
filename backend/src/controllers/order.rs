@@ -35,6 +35,7 @@ fn order_and_items_into_response(res: Order, items: Vec<Item>) -> OrderResponseB
             name: item.name.to_string(),
             value: item.value,
             additional_info: item.additional_info.to_owned(),
+            checked: item.checked,
         })
         .collect::<Vec<_>>();
 
@@ -72,7 +73,7 @@ pub async fn read(session: Session, payload: i32, db: Db) -> Result<OrderRespons
 
 pub async fn list(session: Session, db: Db) -> Result<Vec<OrderResponseBasic>> {
     trace!(" -- CONTROLLER order::list");
-    let res: Vec<Order> = sqlx::query_as("SELECT * FROM orders WHERE deleted=false")
+    let res: Vec<Order> = sqlx::query_as("SELECT * FROM orders WHERE deleted=false ORDER BY id")
         .fetch_all(&db)
         .await?;
     let mut mapped = vec![];
@@ -100,6 +101,7 @@ pub async fn list_with_params(
         builder.push(" AND time_created::date <= ");
         builder.push_bind(de);
     }
+    builder.push(" ORDER BY id");
     let query = builder.build_query_as::<Order>();
     let res: Vec<Order> = query.fetch_all(&db).await?;
     let mut mapped = vec![];
@@ -590,6 +592,7 @@ mod tests {
             value: 1,
             additional_info: None,
             deleted: true,
+            checked: false,
         };
 
         let fx_item2 = Item {
@@ -602,6 +605,7 @@ mod tests {
             value: 2,
             additional_info: None,
             deleted: true,
+            checked: false,
         };
 
         let output = order_and_items_into_response(fx_order, vec![fx_item1, fx_item2]);

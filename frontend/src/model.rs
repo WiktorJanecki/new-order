@@ -17,4 +17,5 @@ pub struct ItemResponseBasic {
     pub name: String,     // for example czerwona farba
     pub value: i32,       // for example 100_00 = 100PLN
     pub additional_info: Option<String>,
+    pub checked: bool,
 }
