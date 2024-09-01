@@ -1,6 +1,5 @@
 use anyhow::{bail, Context};
 use leptos::*;
-use leptos_dom::logging::console_log;
 use leptos_meta::Style;
 use leptos_router::*;
 use reqwest::StatusCode;
@@ -44,7 +43,6 @@ pub fn OrderView() -> impl IntoView {
     let checkeds = move || {
         if let Some(Some(s)) = res.get() {
             let s = s.items.iter().map(|item| item.checked).collect();
-            console_log(&format!("{:?}", s));
             return s;
         }
         vec![]
@@ -53,13 +51,8 @@ pub fn OrderView() -> impl IntoView {
     // binds api responses to vec of signals
     create_effect(move |_| {
         checked_values.set(checkeds().to_owned());
-        console_log(&format!("{:?}", checked_values.get()));
     });
 
-    // let checked_classes = create_rw_signal(Vec::new());
-    // for val in checkeds() {
-    //     checked_classes.get()
-    // }
 
     move || {
         match res.get() {
