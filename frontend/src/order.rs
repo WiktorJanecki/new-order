@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{bail, Context as _};
 use leptos::*;
 use leptos_meta::Style;
 use leptos_router::*;
@@ -6,7 +6,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use thaw::*;
 
-use crate::{model::{ItemResponseBasic, OrderResponseBasic}, API_PATH};
+use crate::{model::{ItemResponseBasic, OrderResponseBasic}, Context, API_PATH};
 
 #[derive(PartialEq, Params)]
 struct OrderParams {
@@ -53,6 +53,35 @@ pub fn OrderView() -> impl IntoView {
         checked_values.set(checkeds().to_owned());
     });
 
+    let quantities= move || {
+        if let Some(Some(s)) = res.get() {
+            let s = s.items.iter().map(|item| item.quantity.to_string()).collect();
+            return s;
+        }
+        vec![]
+    };
+    let quantities_val = create_rw_signal(vec![]);
+    create_effect(move |_| {quantities_val.set(quantities().to_owned());});
+
+    let names= move || {
+        if let Some(Some(s)) = res.get() {
+            let s = s.items.iter().map(|item| item.name.to_string()).collect();
+            return s;
+        }
+        vec![]
+    };
+    let names_val= create_rw_signal(vec![]);
+    create_effect(move |_| {names_val.set(names().to_owned());});
+
+    let values= move || {
+        if let Some(Some(s)) = res.get() {
+            let s = s.items.iter().map(|item| item.value).collect();
+            return s;
+        }
+        vec![]
+    };
+    let values_val= create_rw_signal(vec![]);
+    create_effect(move |_| {values_val.set(values().to_owned());});
 
     move || {
         match res.get() {
@@ -63,6 +92,7 @@ pub fn OrderView() -> impl IntoView {
             <Style>"
                 .checkbox{
                     margin-bottom:5px;
+                    border-color: #e5e8eb;
                 }
                 .striped{
                     position:relative;
@@ -109,15 +139,39 @@ pub fn OrderView() -> impl IntoView {
                                      );
                                 }
                             }></input>
-                            <Input placeholder="1kg" />
-                            <Input placeholder="bejca" />
-                            <Input placeholder="100zł"/>
+                            <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
+                                let mut vec = quantities_val.get();
+                                let d = vec.get_mut(index);
+                                if let Some(val) = d{
+                                    *val=event_target_value(&ev);
+                                }
+                                quantities_val.set(vec);
+                            }
+                            value=move||quantities_val.get().get(index).unwrap_or(&"".to_string()).to_string() class="thaw-input__input-el" placeholder="1kg" /></div>
+                            <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
+                                let mut vec = names_val.get();
+                                let d = vec.get_mut(index);
+                                if let Some(val) = d{
+                                    *val=event_target_value(&ev);
+                                }
+                                names_val.set(vec);
+                            } value=move||names_val.get().get(index).unwrap_or(&"".to_string()).to_string() class="thaw-input__input-el" placeholder="bejca" /></div>
+                            <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
+                                let mut vec = values_val.get();
+                                let d = vec.get_mut(index);
+                                if let Some(val) = d{
+                                    *val=event_target_value(&ev).parse().unwrap_or(0);
+                                }
+                                values_val.set(vec);
+                            } value=move||values_val.get().get(index).unwrap_or(&0).to_string() class="thaw-input__input-el" placeholder="100zł" /></div>
                     </Space>
                 </div>
             }).collect::<Vec<_>>()}
             </Space>
             <br/>
             <Button block=true variant=ButtonVariant::Outlined>"Dodaj Nowy"</Button>
+            <Divider/>
+            <Button block=true on:click=move|_|fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val)>"Zapisz"</Button>
 
 
             </Card>
@@ -166,6 +220,26 @@ async fn fetch_item_check_safe(order_id: i32, item_id: i32, value: bool){
         );
     }
 }
+fn fetch_update_safe(
+    order_id: i32,
+    receiver: RwSignal<String>,
+    additional_info: RwSignal<String>,
+    quantities: RwSignal<Vec<String>>,
+    names: RwSignal<Vec<String>>,
+    values: RwSignal<Vec<i32>>,
+){
+    spawn_local(async move {
+        if let Err(e) =  fetch_update(order_id,receiver,additional_info,quantities,names,values).await{
+            use_message().create(
+                e.to_string(),
+                thaw::MessageVariant::Error,
+                Default::default(),
+            );
+        }
+        let nav = use_navigate();
+        nav("/orders",Default::default());
+    });
+}
 
 // item_index in order
 async fn fetch_item_check(order_id: i32, item_index: i32, value:bool) -> anyhow::Result<()>{
@@ -192,6 +266,63 @@ async fn fetch_item_check(order_id: i32, item_index: i32, value:bool) -> anyhow:
     if res.status() != StatusCode::OK {
         let e = res.text().await?;
         bail!(e.to_string());
+    }
+    Ok(())
+}
+
+async fn fetch_update(
+    order_id: i32,
+    receiver: RwSignal<String>,
+    additional_info: RwSignal<String>,
+    quantities: RwSignal<Vec<String>>,
+    names: RwSignal<Vec<String>>,
+    values: RwSignal<Vec<i32>>,
+
+)->anyhow::Result<()>{
+    let client = reqwest::Client::new();
+    // request for items ids
+    let res = client
+        .get(format!("{}/orders/{order_id}", API_PATH))
+        .fetch_credentials_include()
+        .send()
+        .await?;
+    if res.status() != StatusCode::OK {
+        let e = res.text().await?;
+        bail!(e.to_string());
+    }
+    let json: OrderResponseBasic = res.json().await?;
+    let items = json.items;
+
+    // request for updating order
+    let res = client
+        .patch(format!("{}/orders/{order_id}", API_PATH))
+        .fetch_credentials_include()
+        .json(&json!({
+            "receiver": receiver.get_untracked(),
+            "additional_info": additional_info.get_untracked(),
+        }))
+        .send()
+        .await?;
+    if res.status() != StatusCode::OK {
+        let e = res.text().await?;
+        bail!(e.to_string());
+    }
+
+    // request for updating all items
+    for (index, item) in items.iter().enumerate(){
+        let item_id = item.id;
+        let quantity = quantities.get_untracked().get(index).with_context(||"internal arrays error - fetch update item")?.to_string();
+        let name= names.get_untracked().get(index).with_context(||"internal arrays error - fetch update item")?.to_string();
+        let value= values.get_untracked().get(index).with_context(||"internal arrays error - fetch update item")?.to_owned();
+        let res = client.patch(format!("{}/orders/{order_id}/items/{item_id}",API_PATH)).fetch_credentials_include().json(&json!({
+            "quantity":quantity,
+            "name":name,
+            "value":value,
+        })).send().await?;
+        if res.status() != StatusCode::OK {
+            let e = res.text().await?;
+            bail!(e.to_string());
+        }
     }
     Ok(())
 }
