@@ -1,9 +1,12 @@
+use std::default;
+
 use anyhow::Result;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use reqwest::StatusCode;
 use serde::Deserialize;
+use serde_json::json;
 use thaw::*;
 use wasm_bindgen::JsValue;
 
@@ -28,6 +31,14 @@ pub fn HomeView() -> impl IntoView {
         let nav = use_navigate();
         nav("/dashboard", Default::default());
     };
+    let new_order = |_| {
+        spawn_local(async move {
+            // TODO: make safe
+            let id = fetch_create().await.unwrap();
+            let nav = use_navigate();
+            nav(&format!("/orders/{}", id), Default::default())
+        });
+    };
     let window_size = window()
         .inner_width()
         .unwrap_or(JsValue::from_f64(400.0))
@@ -49,15 +60,15 @@ pub fn HomeView() -> impl IntoView {
                 width:270px;
             }
             .fullheight {
-                height:calc(100% - 40px);
+                min-height:calc(100% - 70px);
             }
         "</Style>
-        <div></div>
+        <div style="content:''; height:30px;"></div>
         <Space class="fullheight" justify=SpaceJustify::Center align=SpaceAlign::Center>
                 {if mobile{view!{
                     // on mobile
                     <Space vertical=true>
-                        <Button class="btn" block=true>"Nowe Zamówienie"</Button>
+                        <Button on_click=new_order class="btn" block=true>"Nowe Zamówienie"</Button>
                         "" // adds 10px margin
                         ""
                         ""
@@ -76,14 +87,14 @@ pub fn HomeView() -> impl IntoView {
                     // on desktop
                         {move|| if  full() {view!{
                             <Space>
-                                <Button class="btn" block=true>"Nowe Zamówienie"</Button>
+                                <Button on_click=new_order class="btn" block=true>"Nowe Zamówienie"</Button>
                                 <Button on_click=list class="btn" block=true>"Lista Zamówień"</Button>
                                 <Button on_click=dashboard class="btn" block=true>"Podsumowanie"</Button>
                                 <Button class="btn" on_click=logout block=true size=ButtonSize::Large>"Wyloguj"</Button>
                             </Space>
                         }.into_view()}else {view!{
                             <Space>
-                                <Button class="btn" block=true>"Nowe Zamówienie"</Button>
+                                <Button on_click=new_order class="btn" block=true>"Nowe Zamówienie"</Button>
                                 <Button on_click=list class="btn" block=true>"Lista Zamówień"</Button>
                                 <Button class="btn" on_click=logout block=true size=ButtonSize::Large>"Wyloguj"</Button>
                             </Space>
@@ -121,4 +132,27 @@ async fn check_login(login_signal: RwSignal<bool>, privileges: RwSignal<String>)
         navigate("/login", Default::default());
         Ok(())
     }
+}
+
+async fn fetch_create() -> Result<i32> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!("{}/orders", API_PATH))
+        .json(&json!({
+            "receiver": "".to_owned(),
+            "additional_info": None::<()>,
+        }))
+        .fetch_credentials_include()
+        .send()
+        .await?;
+    if res.status() != StatusCode::OK {
+        let e = res.text().await?;
+        anyhow::bail!(e.to_string());
+    }
+    #[derive(Deserialize)]
+    struct Output {
+        id: i32,
+    }
+    let json: Output = res.json().await?;
+    Ok(json.id)
 }
