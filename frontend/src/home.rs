@@ -3,6 +3,7 @@ use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use reqwest::StatusCode;
+use serde::Deserialize;
 use thaw::*;
 use wasm_bindgen::JsValue;
 
@@ -13,7 +14,7 @@ pub fn HomeView() -> impl IntoView {
     let messages = use_message();
     let ctx = expect_context::<Context>();
     create_effect(move |_| {
-        spawn_local(check_login_safe(ctx.login, messages));
+        spawn_local(check_login_safe(ctx, messages));
     });
     let logout = |_| {
         let nav = use_navigate();
@@ -23,12 +24,17 @@ pub fn HomeView() -> impl IntoView {
         let nav = use_navigate();
         nav("/orders", Default::default());
     };
+    let dashboard = |_| {
+        let nav = use_navigate();
+        nav("/dashboard", Default::default());
+    };
     let window_size = window()
         .inner_width()
         .unwrap_or(JsValue::from_f64(400.0))
         .as_f64()
         .unwrap_or(400.0);
     let mobile = window_size < 1000f64;
+    let full = move || ctx.privileges.get() == "Full";
     view! {
         <Style>"
             html,body{
@@ -56,6 +62,10 @@ pub fn HomeView() -> impl IntoView {
                         ""
                         ""
                         <Button on_click=list class="btn" block=true>"Lista Zamówień"</Button>
+                        "" // adds 10px margin
+                        ""
+                        ""
+                        {move|| if  full() {view!{<Button on_click=dashboard class="btn" block=true>"Podsumowanie"</Button>}.into_view()}else {view!{<div style="display:none"></div>}.into_view()}}
                         <Divider/>
                         <Button on_click=logout block=true>"Wyloguj"</Button>
                     </Space>
@@ -64,23 +74,32 @@ pub fn HomeView() -> impl IntoView {
 
                 else{view!{
                     // on desktop
-                    <Space>
-                        <Button class="btn" block=true>"Nowe Zamówienie"</Button>
-                        <Button on_click=list class="btn" block=true>"Lista Zamówień"</Button>
-                        <Button class="btn" on_click=logout block=true size=ButtonSize::Large>"Wyloguj"</Button>
-                    </Space>
+                        {move|| if  full() {view!{
+                            <Space>
+                                <Button class="btn" block=true>"Nowe Zamówienie"</Button>
+                                <Button on_click=list class="btn" block=true>"Lista Zamówień"</Button>
+                                <Button on_click=dashboard class="btn" block=true>"Podsumowanie"</Button>
+                                <Button class="btn" on_click=logout block=true size=ButtonSize::Large>"Wyloguj"</Button>
+                            </Space>
+                        }.into_view()}else {view!{
+                            <Space>
+                                <Button class="btn" block=true>"Nowe Zamówienie"</Button>
+                                <Button on_click=list class="btn" block=true>"Lista Zamówień"</Button>
+                                <Button class="btn" on_click=logout block=true size=ButtonSize::Large>"Wyloguj"</Button>
+                            </Space>
+                        }}.into_view()}
                 }.into_view()}}
         </Space>
     }
 }
 
-async fn check_login_safe(login_signal: RwSignal<bool>, messages: MessageInjection) {
-    if let Err(e) = check_login(login_signal).await {
+async fn check_login_safe(ctx: Context, messages: MessageInjection) {
+    if let Err(e) = check_login(ctx.login, ctx.privileges).await {
         messages.create(e.to_string(), MessageVariant::Error, Default::default());
     }
 }
 
-async fn check_login(login_signal: RwSignal<bool>) -> Result<()> {
+async fn check_login(login_signal: RwSignal<bool>, privileges: RwSignal<String>) -> Result<()> {
     let client = reqwest::Client::new();
     let res = client
         .get(format!("{}/token", API_PATH))
@@ -89,6 +108,12 @@ async fn check_login(login_signal: RwSignal<bool>) -> Result<()> {
         .await?;
     if res.status() == StatusCode::OK {
         login_signal.set(true);
+        #[derive(Deserialize)]
+        struct Output {
+            privileges: String,
+        }
+        let prive: Output = res.json().await?;
+        privileges.set(prive.privileges);
         Ok(())
     } else {
         login_signal.set(false);

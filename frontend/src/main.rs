@@ -1,3 +1,4 @@
+use dashboard::DashboardView;
 use home::HomeView;
 use leptos::*;
 use leptos_meta::*;
@@ -8,6 +9,7 @@ use order::OrderView;
 use thaw::*;
 
 pub mod components;
+mod dashboard;
 mod home;
 mod list;
 mod login;
@@ -19,14 +21,16 @@ pub const API_PATH: &str = "http://localhost:3000/api";
 #[derive(Copy, Clone)]
 struct Context {
     login: RwSignal<bool>,
+    privileges: RwSignal<String>,
 }
 
 #[component]
 fn App() -> impl IntoView {
     let theme = create_rw_signal(Theme::light());
     let login = create_rw_signal(false);
+    let privileges = create_rw_signal("".to_owned());
 
-    provide_context(Context { login });
+    provide_context(Context { login, privileges });
 
     view! {
         <Router>
@@ -53,6 +57,7 @@ fn App() -> impl IntoView {
                         <Route path="/login"      view=LoginView />
                         <Route path="/orders/:id" view=OrderView />
                         <Route path="/orders"     view=ListView />
+                        <Route path="/dashboard"  view=DashboardView />
                         <Route path="*any" view=||view!{<h1>"Nie znaleziono strony"</h1>}/>
                     </Routes>
                 </MessageProvider>

@@ -8,6 +8,7 @@ use jwt_simple::{
     prelude::{Duration, MACLike},
 };
 use serde::Deserialize;
+use serde_json::{json, Value};
 use tower_cookies::{Cookie, Cookies};
 use tracing::trace;
 
@@ -23,9 +24,11 @@ pub fn routes() -> Router<AppState> {
 }
 
 // just verify the token
-async fn token(_: Session) -> Result<()> {
+async fn token(session: Session) -> Result<Json<Value>> {
     trace!(" -- HANDLER GET /token");
-    Ok(())
+    Ok(Json(json!({
+        "privileges": session.privileges()
+    })))
 }
 
 #[derive(Deserialize)]

@@ -63,7 +63,7 @@ pub fn ListView() -> impl IntoView {
     }
 }
 
-async fn fetch_orders(params: String) -> Result<Vec<OrderResponseBasic>> {
+pub async fn fetch_orders(params: String) -> Result<Vec<OrderResponseBasic>> {
     let client = reqwest::Client::new();
     let res = client
         .get(format!("{}/orders{params}", API_PATH))
