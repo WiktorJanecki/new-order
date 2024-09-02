@@ -28,10 +28,18 @@ pub fn ListView() -> impl IntoView {
         nav("/", Default::default());
     };
 
+    let go_to_order = |id: i32| {
+        let nav = use_navigate();
+        nav(&format!("/orders/{id}"), Default::default());
+    };
+
     view! {
         <Style>"
             .padding{
                 padding: 0px 28px;
+            }
+            .checked{
+                text-decoration: line-through;
             }
         "
         </Style>
@@ -47,9 +55,17 @@ pub fn ListView() -> impl IntoView {
             move || match res.get() {
                 None => view!{<Space justify=SpaceJustify::Center><Spinner/></Space>}.into_view(),
                 Some(s) => { s.iter().cloned().map(|order: OrderResponseBasic|{view!{
-                    <CollapseItem class={if is_order_checked(&order) {"checked_text"} else {""}} key={order.id.to_string()}  title={order.receiver.to_owned()}>
-                        <OrderCard order=order />
-                    </CollapseItem>
+                    <Space vertical=true>
+                        <Button
+                            class={if is_order_checked(&order) {"checked"}else{""}}
+                             on_click=move|_|go_to_order(order.id)
+                             block=true
+                             variant=ButtonVariant::Outlined>
+
+                             {order.receiver.to_string()}
+                        </Button>
+                        <div style="height:0px"></div>
+                    </Space>
                 }}).collect::<Vec<_>>().into_view()},
 
             }
@@ -57,7 +73,7 @@ pub fn ListView() -> impl IntoView {
         </Collapse>
         <Divider/>
         <Space justify=SpaceJustify::Center>
-        <Button on_click=back>"Wróć"</Button>
+            <Button on_click=back>"Wróć"</Button>
         </Space>
         </div>
     }

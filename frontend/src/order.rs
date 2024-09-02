@@ -1,4 +1,5 @@
 use anyhow::{bail, Context as _};
+use icondata as i;
 use leptos::*;
 use leptos_meta::Style;
 use leptos_router::*;
@@ -6,7 +7,10 @@ use reqwest::StatusCode;
 use serde_json::json;
 use thaw::*;
 
-use crate::{model::{ItemResponseBasic, OrderResponseBasic}, Context, API_PATH};
+use crate::{
+    model::{ItemResponseBasic, OrderResponseBasic},
+    Context, API_PATH,
+};
 
 #[derive(PartialEq, Params)]
 struct OrderParams {
@@ -20,7 +24,7 @@ pub fn OrderView() -> impl IntoView {
         move || params.with(|params| params.as_ref().map(|params| params.id).unwrap_or_default());
     let res = create_resource(|| {}, move |_| fetch_order_safe(id().unwrap_or(0)));
 
-    // form
+    // fetch and create editable input for receiver
     let receiver = move || {
         if let Some(Some(s)) = res.get() {
             return s.receiver;
@@ -30,6 +34,7 @@ pub fn OrderView() -> impl IntoView {
     let receiver_val = create_rw_signal("".to_string());
     create_effect(move |_| receiver_val.set(receiver()));
 
+    // for additional info
     let additional = move || {
         if let Some(Some(s)) = res.get() {
             return s.additional_info.unwrap_or("".to_string());
@@ -38,12 +43,10 @@ pub fn OrderView() -> impl IntoView {
     };
     let additional_val = create_rw_signal("".to_string());
     create_effect(move |_| additional_val.set(additional()));
-
     // vec of checkbox bools which reacts to api responses
     let checkeds = move || {
         if let Some(Some(s)) = res.get() {
-            let s = s.items.iter().map(|item| item.checked).collect();
-            return s;
+            return s.items.iter().map(|item| item.checked).collect();
         }
         vec![]
     };
@@ -52,44 +55,53 @@ pub fn OrderView() -> impl IntoView {
     create_effect(move |_| {
         checked_values.set(checkeds().to_owned());
     });
-
-    let quantities= move || {
-        if let Some(Some(s)) = res.get() {
-            let s = s.items.iter().map(|item| item.quantity.to_string()).collect();
-            return s;
+    let update_check = move |order_id: i32, index: usize| {
+        let mut values = checked_values.get();
+        if let Some(v) = values.get_mut(index) {
+            let new_value: bool = !*v;
+            spawn_local(async move {
+                fetch_update_safe(order_id, receiver_val, additional_val).await;
+                fetch_item_check_safe(order_id, index as i32, new_value).await;
+                res.refetch();
+            });
         }
-        vec![]
     };
-    let quantities_val = create_rw_signal(vec![]);
-    create_effect(move |_| {quantities_val.set(quantities().to_owned());});
 
-    let names= move || {
-        if let Some(Some(s)) = res.get() {
-            let s = s.items.iter().map(|item| item.name.to_string()).collect();
-            return s;
-        }
-        vec![]
+    let delete_item = move |order_id: i32, item_id: i32| {
+        spawn_local(async move {
+            fetch_item_delete_safe(order_id, item_id).await;
+            res.refetch();
+        });
     };
-    let names_val= create_rw_signal(vec![]);
-    create_effect(move |_| {names_val.set(names().to_owned());});
 
-    let values= move || {
-        if let Some(Some(s)) = res.get() {
-            let s = s.items.iter().map(|item| item.value).collect();
-            return s;
-        }
-        vec![]
+    let new_item_quantity = create_rw_signal("".to_string());
+    let new_item_name = create_rw_signal("".to_string());
+    let new_item_value = create_rw_signal(0i32);
+    let add_item = move |order_id: i32| {
+        spawn_local(async move {
+            let val = new_item_value.get_untracked();
+            fetch_update_safe(order_id, receiver_val, additional_val).await;
+            fetch_new_item_safe(order_id, new_item_quantity, new_item_name, val as i32).await;
+            res.refetch();
+        });
     };
-    let values_val= create_rw_signal(vec![]);
-    create_effect(move |_| {values_val.set(values().to_owned());});
+    let delete_order = move |order_id:i32|{
+        spawn_local(async move{
+            fetch_order_delete_safe(order_id).await;
+            let nav = use_navigate();
+            nav("/orders",Default::default());  
+        });
+    };
 
     move || {
         match res.get() {
-        None | Some(None) => {
-            view! {<Space justify=SpaceJustify::Center><Spinner /></Space>}.into_view()
-        }
-        Some(Some(order)) => view! {
-            <Style>"
+            None | Some(None) => {
+                view! {<Space justify=SpaceJustify::Center><Spinner /></Space>}.into_view()
+            }
+            Some(Some(order)) => {
+                let order_b = order.clone();
+                view! {
+                <Style>"
                 .checkbox{
                     margin-bottom:5px;
                     border-color: #e5e8eb;
@@ -108,123 +120,162 @@ pub fn OrderView() -> impl IntoView {
                       display: block;
                 }
             "</Style>
-            <Card title={"Zamówienie nr. ".to_owned()+&order.id.to_string()}>
-            <Space vertical=true>
-                <Space align=SpaceAlign::Center justify=SpaceJustify::SpaceBetween>
-                <Text>"Odbiorca: "</Text> <Input value=receiver_val/>
+                <Card title={"Zamówienie nr. ".to_owned()+&order.id.to_string()}>
+                <Space vertical=true>
+                    <Space align=SpaceAlign::Center justify=SpaceJustify::SpaceBetween>
+                    <Text>"Odbiorca: "</Text> <Input value=receiver_val/>
+                    </Space>
+                    <Space align=SpaceAlign::Center  justify=SpaceJustify::SpaceBetween>
+                    <Text>"Dopis: "</Text> <Input value=additional_val/>
+                    </Space>
                 </Space>
-                <Space align=SpaceAlign::Center  justify=SpaceJustify::SpaceBetween>
-                <Text>"Dopis: "</Text> <Input value=additional_val/>
-                </Space>
-            </Space>
-            <br/>
-            <p>"Przedmioty: "</p>
-            <Space vertical=true>
-            {order.items.iter().enumerate().map(|(index,_item)|view!{
-                <div style="margin-top:5px"></div>
-                <div class:striped=move||{
-                    *checked_values.get().get(index).unwrap_or(&false)
-                }>
-                    <Space align=SpaceAlign::Center>
-                            <input type="checkbox" class="checkbox" checked=move||*checked_values.get().get(index).unwrap_or(&false) on:input=move|_|{
-                                let mut values = checked_values.get();
-                                if let Some(v) = values.get_mut(index){
-                                     let new_value: bool = !*v;       
-                                     spawn_local(
-                                         async move{
-                                             let order_id = order.id;
-                                             fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val).await;
-                                             fetch_item_check_safe(order_id,index as i32,new_value).await;
-                                             res.refetch();
-                                         }
-                                     );
-                                }
-                            }></input>
-                            <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
-                                let mut vec = quantities_val.get();
-                                let d = vec.get_mut(index);
-                                if let Some(val) = d{
-                                    *val=event_target_value(&ev);
-                                }
-                                quantities_val.set(vec);
-                            }
-                            value=move||quantities_val.get().get(index).unwrap_or(&"".to_string()).to_string() class="thaw-input__input-el" placeholder="1kg" /></div>
-                            <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
-                                let mut vec = names_val.get();
-                                let d = vec.get_mut(index);
-                                if let Some(val) = d{
-                                    *val=event_target_value(&ev);
-                                }
+                <br/>
+                <p>"Przedmioty: "</p>
+                <Space vertical=true>
+                // rows
+                {move||{order.items.clone().iter().cloned().enumerate().map(|(index,item)|view!{
+                    <div style="margin-top:5px"></div>
+                    <div class:striped=move||item.checked>
+                        <Space align=SpaceAlign::Center class="inputs">
+                            // checkbox
+                            <input
+                                type="checkbox"
+                                class="checkbox"
+                                checked=move||{item.checked}
+                                on:click=move|_|update_check(order.id,index)
+                            ></input>
 
-                                names_val.set(vec);
-                            } value=move||names_val.get().get(index).unwrap_or(&"".to_string()).to_string() class="thaw-input__input-el" placeholder="bejca" /></div>
-                            <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
-                                let mut vec = values_val.get();
-                                let d = vec.get_mut(index);
-                                if let Some(val) = d{
-                                    let float_value:f32 = event_target_value(&ev).parse().unwrap_or(0f32); 
-                                    let times100 = float_value * 100.0f32;
-                                    *val= times100 as i32;
+                            // quantity
+                            <div class="thaw-input thaw-input--disabled" style="--thaw-background-color-disabled: #fafafc;">
+                                <input disabled value=move||item.quantity.to_string() class="thaw-input__input-el" placeholder="1kg" />
+                            </div>
+
+                            // name
+                            <div class="thaw-input thaw-input--disabled" style="--thaw-background-color-disabled: #fafafc;">
+                                <input disabled value=move||item.name.to_string() class="thaw-input__input-el" placeholder="bejca" />
+                            </div>
+
+                            // value
+                            <div class="thaw-input thaw-input--disabled" style="--thaw-background-color-disabled: #fafafc;">
+                                <input
+                                disabled
+                                value=move||format!("{:.2} zł",item.value as f32/100f32)
+                                class="thaw-input__input-el"
+                                placeholder="bejca" />
+                            </div>
+
+                            // delete
+                            <Button on_click=move|_|delete_item(order.id,item.id) variant=ButtonVariant::Outlined>
+                                <Icon width="15px" icon=i::RiDeleteBin5SystemLine/>
+                            </Button>
+                        </Space>
+                    </div>
+                }).collect::<Vec<_>>()}}
+                //row for add
+                <div>
+                    <Space align=SpaceAlign::Center class="inputs">
+                        // checkbox
+                        // <input type="checkbox" class="checkbox"></input>
+                        // <div style="width:20px; height:20px;content:'';"></div>
+                        <Icon icon=i::AiRightOutlined width="20px" />
+                        <Input value=new_item_quantity placeholder="1kg" />
+                        <Input value=new_item_name placeholder="lakier" />
+                        <div class="thaw-input thaw-input" style="">
+                            <input 
+                                on:input=move|ev|{
+                                    let value = event_target_value(&ev).parse::<f32>().unwrap_or(0.0f32);
+                                    let int_value = (value * 100f32) as i32;
+                                    new_item_value.set(int_value);
                                 }
-                                values_val.set(vec);
-                            } value=move||{
-                                let int_value = *values_val.get().get(index).unwrap_or(&0);
-                                let float_value = int_value as f32;
-                                let div100 = float_value / 100.0f32;
-                                format!("{:.2}",div100)
-                            }  class="thaw-input__input-el" placeholder="100zł" /></div>
+                                class="thaw-input__input-el"
+                                placeholder="100.00zł" />
+                        </div>
+
+                        // add
+                        <Button on:click=move|_|add_item(order.id) color=ButtonColor::Success>
+                            <Icon width="15px" icon=i::RiAddCircleSystemLine/>
+                        </Button>
                     </Space>
                 </div>
-            }).collect::<Vec<_>>()}
-            </Space>
-            <br/>
-            <Button on:click=move|_|{
-                spawn_local(async move{
-                    fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val).await;
-                    fetch_new_item_safe(order.id,res).await;
-                });
-            
+                </Space>
+                <br/>
+
+                <Space>
+                    "Suma: "
+                    {move||format!("{:.2} zł",get_order_sum_value(order_b.items.clone()) as f32 / 100.0f32)}
+                </Space>
+                <br/>
+                <Button on_click=move|_|delete_order(order.id) color=ButtonColor::Error>"Usuń"</Button>
+                // divider and back button
+                <Divider/>
+                <Space justify=SpaceJustify::Center>
+
+                <Button on:click=move|_|{
+                    spawn_local(async move{
+                        fetch_update_safe(order.id,receiver_val,additional_val).await;
+                        let nav = use_navigate();
+                        nav("/orders",Default::default());
+                    });
+                 }>
+                     "Wróć"
+                 </Button>
+                 </Space>
+
+
+                </Card>
             }
-         block=true variant=ButtonVariant::Outlined>"Dodaj Nowy"</Button>
-            <Divider/>
-            <Button block=true on:click=move|_|{
-                spawn_local(async move{
-                    fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val).await;
-                    let nav = use_navigate();
-                    nav("/orders",Default::default());
-                });
-             }>"Zapisz"</Button>
-
-
-            </Card>
+            .into_view()
+            }
         }
-        .into_view(),
-    }
     }
 }
 
+async fn fetch_item_delete(order_id: i32, item_id: i32) -> anyhow::Result<()> {
+    let client = reqwest::Client::new();
+    let res = client
+        .delete(format!("{}/orders/{order_id}/items/{item_id}", API_PATH))
+        .fetch_credentials_include()
+        .send()
+        .await?;
+    if res.status() != StatusCode::OK {
+        let e = res.text().await?;
+        bail!(e.to_string());
+    }
+    Ok(())
+}
 
-async fn fetch_new_item_safe(order_id: i32, res: Resource<(),Option<OrderResponseBasic>>){
-    if let Err(e) = fetch_new_item(order_id).await{
+async fn fetch_item_delete_safe(order_id: i32, item_id: i32) {
+    let _ = fetch_item_delete(order_id, item_id).await;
+}
+
+async fn fetch_new_item_safe(
+    order_id: i32,
+    quan: RwSignal<String>,
+    name: RwSignal<String>,
+    val: i32,
+) {
+    if let Err(e) = fetch_new_item(order_id, quan, name, val).await {
         // use_message().create(
         //     e.to_string(),
         //     thaw::MessageVariant::Error,
         //     Default::default(),
         // );
-        let n = use_navigate();
-        n("/",Default::default());
     }
-    res.refetch();
 }
 
-async fn fetch_new_item(order_id: i32) -> anyhow::Result<()>{
+async fn fetch_new_item(
+    order_id: i32,
+    quan: RwSignal<String>,
+    name: RwSignal<String>,
+    val: i32,
+) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     let res = client
         .post(format!("{}/orders/{order_id}/items", API_PATH))
         .json(&json!({
-            "quantity": "".to_owned(),
-            "name": "".to_owned(),
-            "value": 0,
+            "quantity": quan.get_untracked(),
+            "name": name.get_untracked(),
+            "value": val,
         }))
         .fetch_credentials_include()
         .send()
@@ -236,8 +287,6 @@ async fn fetch_new_item(order_id: i32) -> anyhow::Result<()>{
     Ok(())
 }
 
-  
-
 async fn fetch_order_safe(id: i32) -> Option<OrderResponseBasic> {
     match fetch_order(id).await {
         Ok(s) => Some(s),
@@ -248,7 +297,7 @@ async fn fetch_order_safe(id: i32) -> Option<OrderResponseBasic> {
             //     Default::default(),
             // );
             let n = use_navigate();
-            n("/",Default::default());
+            n("/", Default::default());
             None
         }
     }
@@ -269,37 +318,27 @@ async fn fetch_order(id: i32) -> anyhow::Result<OrderResponseBasic> {
     Ok(json)
 }
 
-
-async fn fetch_item_check_safe(order_id: i32, item_id: i32, value: bool){
-    if let Err(e) =  fetch_item_check(order_id,item_id,value).await{
+async fn fetch_item_check_safe(order_id: i32, item_id: i32, value: bool) {
+    if let Err(e) = fetch_item_check(order_id, item_id, value).await {
         // use_message().create(
         //     e.to_string(),
         //     thaw::MessageVariant::Error,
         //     Default::default(),
         // );
         let n = use_navigate();
-        n("/",Default::default());
+        n("/", Default::default());
     }
 }
 async fn fetch_update_safe(
     order_id: i32,
     receiver: RwSignal<String>,
     additional_info: RwSignal<String>,
-    quantities: RwSignal<Vec<String>>,
-    names: RwSignal<Vec<String>>,
-    values: RwSignal<Vec<i32>>,
-){
-    if let Err(e) =  fetch_update(order_id,receiver,additional_info,quantities,names,values).await{
-        // use_message().create(
-        //     e.to_string(),
-        //     thaw::MessageVariant::Error,
-        //     Default::default(),
-        // );
-        }
+) {
+    if let Err(_) = fetch_update(order_id, receiver, additional_info).await {}
 }
 
 // item_index in order
-async fn fetch_item_check(order_id: i32, item_index: i32, value:bool) -> anyhow::Result<()>{
+async fn fetch_item_check(order_id: i32, item_index: i32, value: bool) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     let res = client
         .get(format!("{}/orders/{order_id}", API_PATH))
@@ -311,7 +350,11 @@ async fn fetch_item_check(order_id: i32, item_index: i32, value:bool) -> anyhow:
         bail!(e.to_string());
     }
     let json: OrderResponseBasic = res.json().await?;
-    let item_id = json.items.get(item_index as usize).context("failed to index item")?.id;
+    let item_id = json
+        .items
+        .get(item_index as usize)
+        .context("failed to index item")?
+        .id;
     let res = client
         .patch(format!("{}/orders/{order_id}/items/{item_id}", API_PATH))
         .fetch_credentials_include()
@@ -331,25 +374,8 @@ async fn fetch_update(
     order_id: i32,
     receiver: RwSignal<String>,
     additional_info: RwSignal<String>,
-    quantities: RwSignal<Vec<String>>,
-    names: RwSignal<Vec<String>>,
-    values: RwSignal<Vec<i32>>,
-
-)->anyhow::Result<()>{
+) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
-    // request for items ids
-    let res = client
-        .get(format!("{}/orders/{order_id}", API_PATH))
-        .fetch_credentials_include()
-        .send()
-        .await?;
-    if res.status() != StatusCode::OK {
-        let e = res.text().await?;
-        bail!(e.to_string());
-    }
-    let json: OrderResponseBasic = res.json().await?;
-    let items = json.items;
-
     // request for updating order
     let res = client
         .patch(format!("{}/orders/{order_id}", API_PATH))
@@ -364,23 +390,37 @@ async fn fetch_update(
         let e = res.text().await?;
         bail!(e.to_string());
     }
-
-    // request for updating all items
-    for (index, item) in items.iter().enumerate(){
-        let item_id = item.id;
-        let quantity = quantities.get_untracked().get(index).with_context(||"internal arrays error - fetch update item")?.to_string();
-        let name= names.get_untracked().get(index).with_context(||"internal arrays error - fetch update item")?.to_string();
-        let value= values.get_untracked().get(index).with_context(||"internal arrays error - fetch update item")?.to_owned();
-        let res = client.patch(format!("{}/orders/{order_id}/items/{item_id}",API_PATH)).fetch_credentials_include().json(&json!({
-            "quantity":quantity,
-            "name":name,
-            "value":value,
-        })).send().await?;
-        if res.status() != StatusCode::OK {
-            let e = res.text().await?;
-            bail!(e.to_string());
-        }
-    }
     Ok(())
 }
 
+fn get_number_from_string(s: String) -> i32 {
+    let numb = s
+        .chars()
+        .filter(|e| e.is_ascii_digit())
+        .collect::<String>()
+        .parse();
+    numb.unwrap_or(0)
+}
+fn get_order_sum_value(items: Vec<ItemResponseBasic>) -> i32 {
+    items
+        .iter()
+        .map(|item| get_number_from_string(item.quantity.to_string()) * item.value)
+        .sum()
+}
+
+async fn fetch_order_delete_safe(order_id: i32){
+    let _ = fetch_order_delete(order_id).await;
+}
+async fn fetch_order_delete(order_id: i32) -> anyhow::Result<()>{
+    let client = reqwest::Client::new();
+    let res = client.delete(format!("{}/orders/{order_id}",API_PATH)).
+        fetch_credentials_include()
+        .send()
+        .await?;
+
+    if res.status() != StatusCode::OK {
+        let e = res.text().await?;
+        bail!(e.to_string());
+    }
+    Ok(())    
+}

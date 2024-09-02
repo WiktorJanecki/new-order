@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_router::*;
 use thaw::MessageVariant;
 use thaw::*;
 
@@ -20,6 +21,10 @@ pub fn DashboardView() -> impl IntoView {
             }
         },
     );
+    let back = |_| {
+        let nav = use_navigate();
+        nav("/", Default::default());
+    };
     view! {
         <Card title="Podsumowanie">
             <Space vertical=true>
@@ -41,6 +46,10 @@ pub fn DashboardView() -> impl IntoView {
                 <Space>
                     <Button>"Pobierz excela"</Button>
                     <Button>"Pobierz kopie zapasową"</Button>
+                </Space>
+                <Divider/>
+                <Space justify=SpaceJustify::Center>
+                    <Button on_click=back>"Wróć"</Button>
                 </Space>
             </Space>
         </Card>
