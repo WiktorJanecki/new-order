@@ -133,6 +133,7 @@ pub fn OrderView() -> impl IntoView {
                                      spawn_local(
                                          async move{
                                              let order_id = order.id;
+                                             fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val).await;
                                              fetch_item_check_safe(order_id,index as i32,new_value).await;
                                              res.refetch();
                                          }
@@ -154,24 +155,45 @@ pub fn OrderView() -> impl IntoView {
                                 if let Some(val) = d{
                                     *val=event_target_value(&ev);
                                 }
+
                                 names_val.set(vec);
                             } value=move||names_val.get().get(index).unwrap_or(&"".to_string()).to_string() class="thaw-input__input-el" placeholder="bejca" /></div>
                             <div class="thaw-input" style="--thaw-placeholder-color: #c2c2c2;"><input on:input=move|ev|{
                                 let mut vec = values_val.get();
                                 let d = vec.get_mut(index);
                                 if let Some(val) = d{
-                                    *val=event_target_value(&ev).parse().unwrap_or(0);
+                                    let float_value:f32 = event_target_value(&ev).parse().unwrap_or(0f32); 
+                                    let times100 = float_value * 100.0f32;
+                                    *val= times100 as i32;
                                 }
                                 values_val.set(vec);
-                            } value=move||values_val.get().get(index).unwrap_or(&0).to_string() class="thaw-input__input-el" placeholder="100zł" /></div>
+                            } value=move||{
+                                let int_value = *values_val.get().get(index).unwrap_or(&0);
+                                let float_value = int_value as f32;
+                                let div100 = float_value / 100.0f32;
+                                format!("{:.2}",div100)
+                            }  class="thaw-input__input-el" placeholder="100zł" /></div>
                     </Space>
                 </div>
             }).collect::<Vec<_>>()}
             </Space>
             <br/>
-            <Button block=true variant=ButtonVariant::Outlined>"Dodaj Nowy"</Button>
+            <Button on:click=move|_|{
+                spawn_local(async move{
+                    fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val).await;
+                    fetch_new_item_safe(order.id,res).await;
+                });
+            
+            }
+         block=true variant=ButtonVariant::Outlined>"Dodaj Nowy"</Button>
             <Divider/>
-            <Button block=true on:click=move|_|fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val)>"Zapisz"</Button>
+            <Button block=true on:click=move|_|{
+                spawn_local(async move{
+                    fetch_update_safe(order.id,receiver_val,additional_val,quantities_val,names_val,values_val).await;
+                    let nav = use_navigate();
+                    nav("/orders",Default::default());
+                });
+             }>"Zapisz"</Button>
 
 
             </Card>
@@ -181,15 +203,52 @@ pub fn OrderView() -> impl IntoView {
     }
 }
 
+
+async fn fetch_new_item_safe(order_id: i32, res: Resource<(),Option<OrderResponseBasic>>){
+    if let Err(e) = fetch_new_item(order_id).await{
+        // use_message().create(
+        //     e.to_string(),
+        //     thaw::MessageVariant::Error,
+        //     Default::default(),
+        // );
+        let n = use_navigate();
+        n("/",Default::default());
+    }
+    res.refetch();
+}
+
+async fn fetch_new_item(order_id: i32) -> anyhow::Result<()>{
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!("{}/orders/{order_id}/items", API_PATH))
+        .json(&json!({
+            "quantity": "".to_owned(),
+            "name": "".to_owned(),
+            "value": 0,
+        }))
+        .fetch_credentials_include()
+        .send()
+        .await?;
+    if res.status() != StatusCode::OK {
+        let e = res.text().await?;
+        bail!(e.to_string());
+    }
+    Ok(())
+}
+
+  
+
 async fn fetch_order_safe(id: i32) -> Option<OrderResponseBasic> {
     match fetch_order(id).await {
         Ok(s) => Some(s),
         Err(e) => {
-            use_message().create(
-                e.to_string(),
-                thaw::MessageVariant::Error,
-                Default::default(),
-            );
+            // use_message().create(
+            //     e.to_string(),
+            //     thaw::MessageVariant::Error,
+            //     Default::default(),
+            // );
+            let n = use_navigate();
+            n("/",Default::default());
             None
         }
     }
@@ -213,14 +272,16 @@ async fn fetch_order(id: i32) -> anyhow::Result<OrderResponseBasic> {
 
 async fn fetch_item_check_safe(order_id: i32, item_id: i32, value: bool){
     if let Err(e) =  fetch_item_check(order_id,item_id,value).await{
-        use_message().create(
-            e.to_string(),
-            thaw::MessageVariant::Error,
-            Default::default(),
-        );
+        // use_message().create(
+        //     e.to_string(),
+        //     thaw::MessageVariant::Error,
+        //     Default::default(),
+        // );
+        let n = use_navigate();
+        n("/",Default::default());
     }
 }
-fn fetch_update_safe(
+async fn fetch_update_safe(
     order_id: i32,
     receiver: RwSignal<String>,
     additional_info: RwSignal<String>,
@@ -228,17 +289,13 @@ fn fetch_update_safe(
     names: RwSignal<Vec<String>>,
     values: RwSignal<Vec<i32>>,
 ){
-    spawn_local(async move {
-        if let Err(e) =  fetch_update(order_id,receiver,additional_info,quantities,names,values).await{
-            use_message().create(
-                e.to_string(),
-                thaw::MessageVariant::Error,
-                Default::default(),
-            );
+    if let Err(e) =  fetch_update(order_id,receiver,additional_info,quantities,names,values).await{
+        // use_message().create(
+        //     e.to_string(),
+        //     thaw::MessageVariant::Error,
+        //     Default::default(),
+        // );
         }
-        let nav = use_navigate();
-        nav("/orders",Default::default());
-    });
 }
 
 // item_index in order
