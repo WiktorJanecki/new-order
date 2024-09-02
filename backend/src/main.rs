@@ -1,9 +1,9 @@
-use axum::{middleware, Router};
+use axum::{middleware, routing::get_service, Router};
 use backend::{middlewares::mw_tracing, routes, AppState};
 use jwt_simple::prelude::HS256Key;
 use sqlx::postgres::PgPoolOptions;
 use tower_cookies::CookieManagerLayer;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::prelude::*;
 
 #[tokio::main]
@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .nest("/api", routes::routes())
+        .nest_service("/", get_service(ServeDir::new("./dist")))
         .layer(TraceLayer::new_for_http())
         .layer(CookieManagerLayer::new())
         .layer(CorsLayer::very_permissive())
