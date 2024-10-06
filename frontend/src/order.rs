@@ -83,6 +83,9 @@ pub fn OrderView() -> impl IntoView {
             fetch_update_safe(order_id, receiver_val, additional_val).await;
             fetch_new_item_safe(order_id, new_item_quantity, new_item_name, val as i32).await;
             res.refetch();
+            new_item_quantity.set("".to_owned());
+            new_item_name.set("".to_owned());
+            new_item_value.set(0);
         });
     };
     let delete_order = move |order_id:i32|{
@@ -118,6 +121,9 @@ pub fn OrderView() -> impl IntoView {
                       content: '';
                       width: 100%;
                       display: block;
+                }
+                input::placeholder{
+                    color: #c2c2c2 !important;
                 }
             "</Style>
                 <Card title={"Zamówienie nr. ".to_owned()+&order.id.to_string()}>
@@ -401,7 +407,7 @@ fn get_number_from_string(s: String) -> i32 {
         .parse();
     numb.unwrap_or(0)
 }
-fn get_order_sum_value(items: Vec<ItemResponseBasic>) -> i32 {
+pub fn get_order_sum_value(items: Vec<ItemResponseBasic>) -> i32 {
     items
         .iter()
         .map(|item| get_number_from_string(item.quantity.to_string()) * item.value)

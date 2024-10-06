@@ -6,6 +6,7 @@ use thaw::*;
 use crate::components::list_filters::ListFilter;
 use crate::list::fetch_orders;
 use crate::model::OrderResponseBasic;
+use crate::order::get_order_sum_value;
 #[component]
 pub fn DashboardView() -> impl IntoView {
     let params = create_rw_signal(String::from(""));
@@ -59,9 +60,8 @@ pub fn DashboardView() -> impl IntoView {
 fn count_income(vec: Vec<OrderResponseBasic>) -> i32 {
     let mut income = 0;
     for order in vec {
-        for item in order.items {
-            income += item.value;
-        }
+        let order_value = get_order_sum_value(order.items);
+        income += order_value;
     }
     income
 }
