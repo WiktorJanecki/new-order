@@ -18,10 +18,7 @@ use crate::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/orders/:order_id/items", post(handler_create))
-        .route(
-            "/orders/:order_id/items/:item_id",
-            delete(handler_delete).patch(handler_update),
-        )
+        .route("/orders/:order_id/items/:item_id", delete(handler_delete))
 }
 
 #[derive(Deserialize)]
@@ -49,33 +46,6 @@ async fn handler_create(
         "id": output
     });
     Ok(Json(json))
-}
-
-#[derive(Deserialize)]
-struct UpdatePayload {
-    pub quantity: Option<String>,
-    pub name: Option<String>,
-    pub value: Option<i32>,
-    pub additional_info: Option<String>,
-    pub checked: Option<bool>,
-}
-
-async fn handler_update(
-    session: Session,
-    AppState { db, .. }: AppState,
-    Path((order_id, item_id)): Path<(i32, i32)>,
-    payload: Json<UpdatePayload>,
-) -> Result<()> {
-    trace!(" -- HANDLER UPDATE /orders/{order_id}/items/{item_id}");
-    let item_fu = ItemForUpdate {
-        quantity: payload.quantity.to_owned(),
-        name: payload.name.to_owned(),
-        value: payload.value,
-        additional_info: payload.additional_info.to_owned(),
-        checked: payload.checked,
-    };
-    controllers::item::update(session, item_id, item_fu, db).await?;
-    Ok(())
 }
 
 async fn handler_delete(

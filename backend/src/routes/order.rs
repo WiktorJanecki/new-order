@@ -9,7 +9,7 @@ use tracing::trace;
 
 use crate::{
     controllers,
-    models::order::{OrderForCreate, OrderForUpdate, OrderListParams, OrderResponseBasic},
+    models::order::{OrderForCreate, OrderListParams, OrderResponseBasic},
     session::Session,
     AppState, Result,
 };
@@ -17,7 +17,7 @@ use crate::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/orders", post(create).get(list))
-        .route("/orders/:id", get(read).patch(update).delete(delete))
+        .route("/orders/:id", get(read).delete(delete))
 }
 
 // POST /orders
@@ -71,27 +71,6 @@ async fn list(
     }
     let output = controllers::order::list(session, db).await?;
     Ok(Json(output))
-}
-
-#[derive(Deserialize)]
-struct UpdatePayload {
-    receiver: Option<String>,
-    additional_info: Option<String>,
-}
-
-async fn update(
-    session: Session,
-    AppState { db, .. }: AppState,
-    Path(id): Path<i32>,
-    payload: Json<UpdatePayload>,
-) -> Result<()> {
-    trace!(" -- HANDLER PATCH /orders/{}", id);
-    let orderfu = OrderForUpdate {
-        receiver: payload.receiver.clone(),
-        additional_info: payload.additional_info.clone(),
-    };
-    controllers::order::update(session, id, orderfu, db).await?;
-    Ok(())
 }
 
 async fn delete(

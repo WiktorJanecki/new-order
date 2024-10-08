@@ -1,7 +1,7 @@
 use tracing::trace;
 
 use crate::{
-    models::item::{Item, ItemForCreate, ItemForUpdate},
+    models::item::{Item, ItemForCreate},
     session::Session,
     Db, Error, Result,
 };
@@ -54,37 +54,6 @@ pub async fn read_where_order_id(_session: Session, order_id: i32, db: Db) -> Re
     Ok(result)
 }
 
-pub async fn update(_session: Session, item_id: i32, item_fu: ItemForUpdate, db: Db) -> Result<()> {
-    trace!(" -- CONTROLLER item::update");
-    let res = sqlx::query(
-        "
-            UPDATE items SET
-                quantity=COALESCE($1,quantity),
-                name=COALESCE($2,name),
-                value=COALESCE($3,value),
-                additional_info=COALESCE($4,additional_info),
-                checked=COALESCE($5,checked)
-            WHERE id=$6
-                
-        ",
-    )
-    .bind(item_fu.quantity)
-    .bind(item_fu.name)
-    .bind(item_fu.value)
-    .bind(item_fu.additional_info)
-    .bind(item_fu.checked)
-    .bind(item_id)
-    .execute(&db)
-    .await?;
-    if res.rows_affected() == 0 {
-        return Err(Error::SQLEntityNotFound {
-            entity_type: "item",
-            id: item_id,
-        });
-    }
-    Ok(())
-}
-
 pub async fn delete(_session: Session, item_id: i32, db: Db) -> Result<()> {
     trace!(" -- CONTROLLER item::delete");
     let result = sqlx::query(
@@ -110,11 +79,8 @@ pub async fn delete(_session: Session, item_id: i32, db: Db) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        controllers,
-        models::item::{Item, ItemForCreate},
-    };
-    use anyhow::{Context, Result};
+    use crate::models::item::{Item, ItemForCreate};
+    use anyhow::Result;
 
     use super::*;
 
@@ -221,65 +187,6 @@ mod tests {
         let res = read_where_order_id(Session::BASIC(), 2, pool.clone()).await?;
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].id, id3_order2);
-        Ok(())
-    }
-    #[sqlx::test]
-    async fn item_update_not_found(pool: Db) -> Result<()> {
-        let id = 4;
-        let fe = ItemForUpdate {
-            quantity: None,
-            name: None,
-            value: None,
-            additional_info: None,
-            checked: None,
-        };
-        let result = update(Session::BASIC(), id, fe, pool.clone()).await;
-        assert_eq!(
-            result,
-            Err(crate::Error::SQLEntityNotFound {
-                entity_type: "item",
-                id
-            })
-        );
-        Ok(())
-    }
-    #[sqlx::test]
-    async fn item_update(pool: Db) -> Result<()> {
-        // create new item
-        let item_fc = ItemForCreate {
-            quantity: "15kg".to_owned(),
-            name: "bejca".to_owned(),
-            value: 13000,
-            additional_info: None,
-        };
-        let id = create(Session::BASIC(), item_fc, 0, pool.clone()).await?;
-
-        // fetch
-        let items =
-            controllers::item::read_where_order_id(Session::BASIC(), 0, pool.clone()).await?;
-        let item = items[0].to_owned();
-        assert_eq!(item.quantity, "15kg");
-        assert_eq!(item.value, 13000);
-        assert!(!item.checked);
-
-        // update
-        let item_fu = ItemForUpdate {
-            quantity: Some("2l".to_owned()),
-            name: None,
-            value: Some(20),
-            additional_info: None,
-            checked: Some(true),
-        };
-        controllers::item::update(Session::BASIC(), id, item_fu, pool.clone()).await?;
-
-        // fetch updated
-        let items =
-            controllers::item::read_where_order_id(Session::BASIC(), 0, pool.clone()).await?;
-        let item = items[0].to_owned();
-        assert_eq!(item.quantity, "2l");
-        assert_eq!(item.value, 20);
-        assert!(item.checked);
-
         Ok(())
     }
 }

@@ -20,11 +20,6 @@ pub struct OrderForCreate {
     pub additional_info: Option<String>,
 }
 
-pub struct OrderForUpdate {
-    pub receiver: Option<String>,
-    pub additional_info: Option<String>,
-}
-
 #[derive(Serialize, Debug)]
 pub struct OrderResponseBasic {
     pub id: i32,

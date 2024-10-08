@@ -4,7 +4,7 @@ use crate::{
     controllers,
     models::{
         item::{Item, ItemResponseBasic},
-        order::{Order, OrderForCreate, OrderForUpdate, OrderListParams, OrderResponseBasic},
+        order::{Order, OrderForCreate, OrderListParams, OrderResponseBasic},
     },
     session::Session,
     Db, Error, Result,
@@ -111,24 +111,6 @@ pub async fn list_with_params(
         mapped.push(order_and_items_into_response(order, items));
     }
     Ok(mapped)
-}
-
-pub async fn update(_session: Session, id: i32, payload: OrderForUpdate, db: Db) -> Result<()> {
-    trace!(" -- CONTROLLER order::update");
-    sqlx::query(
-        "
-            UPDATE orders SET 
-                receiver=COALESCE($1,receiver),
-                additional_info=COALESCE($2, additional_info)
-            WHERE id=$3
-        ",
-    )
-    .bind(payload.receiver)
-    .bind(payload.additional_info)
-    .bind(id)
-    .execute(&db)
-    .await?;
-    Ok(())
 }
 
 pub async fn delete(_session: Session, id: i32, db: Db) -> Result<()> {
@@ -494,45 +476,6 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn order_update_not_found(pool: Db) -> Result<()> {
-        let orderfu = OrderForUpdate {
-            receiver: None,
-            additional_info: None,
-        };
-        let should_err =
-            controllers::order::update(Session::BASIC(), 0, orderfu, pool.clone()).await;
-        let _err = Error::SQLEntityNotFound {
-            entity_type: "order",
-            id: 0,
-        };
-        assert!(matches!(should_err, _err));
-        Ok(())
-    }
-
-    #[sqlx::test]
-    async fn order_update(pool: Db) -> Result<()> {
-        let order_fc = OrderForCreate {
-            receiver: "tomek".to_owned(),
-            additional_info: None,
-        };
-        let id = controllers::order::create(Session::BASIC(), order_fc, pool.clone()).await?;
-
-        let fetched = controllers::order::read(Session::BASIC(), id, pool.clone()).await?;
-        assert_eq!(fetched.additional_info, None);
-
-        let order_fu = OrderForUpdate {
-            receiver: None,
-            additional_info: Some("Actually".to_owned()),
-        };
-
-        controllers::order::update(Session::BASIC(), id, order_fu, pool.clone()).await?;
-
-        let fetched = controllers::order::read(Session::BASIC(), id, pool.clone()).await?;
-        assert_eq!(fetched.additional_info, Some("Actually".to_owned()));
-
-        Ok(())
-    }
     #[sqlx::test]
     async fn order_delete_not_found(pool: Db) -> Result<()> {
         let should_err = controllers::order::delete(Session::BASIC(), 0, pool.clone()).await;
