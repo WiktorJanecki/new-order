@@ -33,10 +33,10 @@ pub fn HomeView() -> impl IntoView {
     };
     let new_order = |_| {
         spawn_local(async move {
-            // TODO: make safe
-            let id = fetch_create().await.unwrap();
-            let nav = use_navigate();
-            nav(&format!("/orders/{}", id), Default::default())
+            if let Ok(id) = fetch_create().await {
+                let nav = use_navigate();
+                nav(&format!("/orders/{}", id), Default::default())
+            }
         });
     };
     let window_size = window()
