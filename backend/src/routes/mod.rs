@@ -2,6 +2,7 @@ use axum::Router;
 
 use crate::AppState;
 
+mod admin;
 mod item;
 mod login;
 mod order;
@@ -12,5 +13,6 @@ pub fn routes() -> Router<AppState> {
         .merge(ping::routes())
         .merge(login::routes())
         .merge(order::routes())
+        .merge(admin::routes())
         .merge(item::routes())
 }

@@ -1,7 +1,7 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 
-#[derive(FromRow, Clone)]
+#[derive(FromRow, Clone, Deserialize, Serialize)]
 pub struct Item {
     pub id: i32,
     pub order_id: i32,

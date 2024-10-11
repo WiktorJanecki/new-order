@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 
-use super::item::ItemResponseBasic;
+use super::item::{Item, ItemResponseBasic};
 
 #[derive(Serialize, Deserialize, FromRow)]
 pub struct Order {
@@ -27,6 +27,17 @@ pub struct OrderResponseBasic {
     pub receiver: String,
     pub additional_info: Option<String>,
     pub items: Vec<ItemResponseBasic>,
+}
+#[derive(Serialize, Deserialize, FromRow)]
+pub struct OrderResponseFull {
+    pub id: i32,
+    pub creator_id: i32,
+    pub time_created: chrono::NaiveDateTime,
+    pub receiver: String,
+    pub additional_info: Option<String>,
+    pub deleted: bool,
+    pub paid: bool,
+    pub items: Vec<Item>,
 }
 #[derive(Deserialize)]
 pub struct OrderListParams {
